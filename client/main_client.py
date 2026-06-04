@@ -1,0 +1,40 @@
+import logging
+import pygame
+from client.network_client import NetworkClient
+from client.arena import run_game 
+from shared.config import SERVER_IP, SERVER_PORT
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+
+def start_client():
+    player_id = input("Masukkan Player ID kamu (contoh: tata_u): ").strip()
+    if not player_id:
+        player_id = "Player_" + str(int(pygame.time.get_ticks() / 1000))
+
+    ready = input("Room siap! Ketik 'Y' untuk masuk ke arena CTF: ").strip().upper()
+    if ready != 'Y':
+        print("Membatalkan join. Keluar dari game...")
+        return
+
+    net_client = NetworkClient(player_id)
+    logging.info(f"Mencoba connect ke {SERVER_IP}:{SERVER_PORT}...")
+    
+    try:
+        net_client.connect()
+        logging.info("Tersambung ke server. Memulai Arena...")
+        run_game(player_id, net_client)
+        
+    except ConnectionRefusedError:
+        logging.error("Server tidak ditemukan! Pastikan main_server.py menyala.")
+    except Exception as e:
+        logging.error(f"Error kritis: {e}")
+    finally:
+        if hasattr(net_client, 'sock') and net_client.sock:
+            try:
+                net_client.sock.close()
+                logging.info("Koneksi jaringan ditutup.")
+            except:
+                pass
+
+if __name__ == "__main__":
+    start_client()
