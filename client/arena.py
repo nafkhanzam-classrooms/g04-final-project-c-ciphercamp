@@ -1,6 +1,7 @@
 import pygame
 import sys
 import os
+import time
 from client.network_client import NetworkClient
 from shared.config import *
 
@@ -28,24 +29,54 @@ def run_game(player_id, net_client):
     try:
         font = pygame.font.SysFont("consolas", 18, bold=True)
         tooltip_font = pygame.font.SysFont("consolas", 14)
+        question_font = pygame.font.SysFont("consolas", 16)
     except:
         pygame.font.init()
         font = pygame.font.SysFont(None, 24, bold=True)
         tooltip_font = pygame.font.SysFont(None, 18)
+        question_font = pygame.font.SysFont(None, 20)
 
     player_sprites, has_sprites = load_player_sprites()
 
     rooms = [
-        pygame.Rect(300, 150, 400, 400), 
-        pygame.Rect(50, 150, 200, 150),  
-        pygame.Rect(750, 150, 200, 150), 
-        pygame.Rect(400, 550, 200, 100)  
+        pygame.Rect(400, 550, 200, 100), 
+        pygame.Rect(450, 350, 100, 200), 
+        pygame.Rect(400, 200, 200, 150), 
+        pygame.Rect(100, 200, 200, 150), 
+        pygame.Rect(700, 200, 200, 150), 
+        pygame.Rect(300, 50, 400, 100),  
+        pygame.Rect(100, 450, 150, 150), 
+        pygame.Rect(750, 450, 150, 150), 
+        pygame.Rect(300, 230, 100, 90),  
+        pygame.Rect(600, 230, 100, 90),  
+        pygame.Rect(450, 150, 100, 50),  
+        pygame.Rect(135, 350, 80, 100),  
+        pygame.Rect(785, 350, 80, 100),  
     ]
 
     door_rects = {
-        "door_1": pygame.Rect(250, 200, 50, 60),
-        "door_2": pygame.Rect(700, 200, 50, 60)
+        "door_main": pygame.Rect(450, 400, 100, 40),
+        "door_left": pygame.Rect(330, 230, 40, 90),
+        "door_right": pygame.Rect(630, 230, 40, 90),
+        "door_top": pygame.Rect(450, 155, 100, 40),
+        "door_sec1": pygame.Rect(135, 380, 80, 40),
+        "door_sec2": pygame.Rect(785, 380, 80, 40)
     }
+
+    connection_rects = [
+        pygame.Rect(451, 535, 98, 30),
+        pygame.Rect(451, 335, 98, 30),
+        pygame.Rect(285, 231, 30, 88),
+        pygame.Rect(385, 231, 30, 88),
+        pygame.Rect(585, 231, 30, 88),
+        pygame.Rect(685, 231, 30, 88),
+        pygame.Rect(451, 135, 98, 30),
+        pygame.Rect(451, 185, 98, 30),
+        pygame.Rect(136, 435, 78, 30),
+        pygame.Rect(136, 335, 78, 30),
+        pygame.Rect(786, 435, 78, 30),
+        pygame.Rect(786, 335, 78, 30)
+    ]
 
     initial_walls = []
     wall_thickness = 15
@@ -56,36 +87,63 @@ def run_game(player_id, net_client):
         initial_walls.append(pygame.Rect(r.right, r.top - wall_thickness, wall_thickness, r.height + wall_thickness*2)) 
 
     walls = []
+    carvers = list(door_rects.values()) + connection_rects
+    
     for w in initial_walls:
-        is_carved = False
-        for d_id, d_rect in door_rects.items():
-            if w.colliderect(d_rect):
-                wall_top = pygame.Rect(w.x, w.y, w.width, d_rect.top - w.y)
-                wall_bottom = pygame.Rect(w.x, d_rect.bottom, w.width, w.bottom - d_rect.bottom)
-                if wall_top.height > 0: walls.append(wall_top)
-                if wall_bottom.height > 0: walls.append(wall_bottom)
-                is_carved = True
-                break
-        if not is_carved:
-            walls.append(w)
+        pieces = [w]
+        for c in carvers:
+            new_pieces = []
+            for p in pieces:
+                if p.colliderect(c):
+                    if p.width > p.height: 
+                        left = pygame.Rect(p.x, p.y, c.left - p.x, p.height)
+                        right = pygame.Rect(c.right, p.y, p.right - c.right, p.height)
+                        if left.width > 0: new_pieces.append(left)
+                        if right.width > 0: new_pieces.append(right)
+                    else: 
+                        top = pygame.Rect(p.x, p.y, p.width, c.top - p.y)
+                        bottom = pygame.Rect(p.x, c.bottom, p.width, p.bottom - c.bottom)
+                        if top.height > 0: new_pieces.append(top)
+                        if bottom.height > 0: new_pieces.append(bottom)
+                else:
+                    new_pieces.append(p)
+            pieces = new_pieces
+        walls.extend(pieces)
 
     terminal_rects = {
-        "term_1": pygame.Rect(450, 300, 40, 40),
-        "term_2": pygame.Rect(550, 300, 40, 40),
-        "term_3": pygame.Rect(100, 200, 40, 40),
-        "term_4": pygame.Rect(850, 200, 40, 40)
+        "term_tut": pygame.Rect(480, 570, 40, 40), 
+        "term_e1": pygame.Rect(120, 220, 40, 40),  
+        "term_e2": pygame.Rect(220, 220, 40, 40),
+        "term_e3": pygame.Rect(120, 280, 40, 40),
+        "term_m1": pygame.Rect(720, 220, 40, 40),  
+        "term_m2": pygame.Rect(820, 220, 40, 40),
+        "term_m3": pygame.Rect(720, 280, 40, 40),
+        "term_h1": pygame.Rect(350, 70, 40, 40),   
+        "term_h2": pygame.Rect(500, 70, 40, 40),
+        "term_h3": pygame.Rect(600, 70, 40, 40),
+        "term_sec1": pygame.Rect(150, 500, 40, 40),
+        "term_sec2": pygame.Rect(800, 500, 40, 40) 
     }
 
     terminal_visuals = {
-        "term_1": {"tier": "E", "color": (50, 150, 200), "reward": 50},
-        "term_2": {"tier": "E", "color": (50, 150, 200), "reward": 50},
-        "term_3": {"tier": "M", "color": (200, 150, 50), "reward": 100},
-        "term_4": {"tier": "H", "color": (200, 50, 200), "reward": 300}
+        "term_tut": {"tier": "T", "color": (150, 150, 150)},
+        "term_e1": {"tier": "E", "color": (50, 150, 200)},
+        "term_e2": {"tier": "E", "color": (50, 150, 200)},
+        "term_e3": {"tier": "E", "color": (50, 150, 200)},
+        "term_m1": {"tier": "M", "color": (200, 150, 50)},
+        "term_m2": {"tier": "M", "color": (200, 150, 50)},
+        "term_m3": {"tier": "M", "color": (200, 150, 50)},
+        "term_h1": {"tier": "H", "color": (200, 50, 200)},
+        "term_h2": {"tier": "H", "color": (200, 50, 200)},
+        "term_h3": {"tier": "H", "color": (200, 50, 200)},
+        "term_sec1": {"tier": "S", "color": (255, 100, 100)},
+        "term_sec2": {"tier": "S", "color": (255, 100, 100)}
     }
 
     has_spawned = False
     hacking_mode = False
     active_terminal_id = None
+    user_text = ""
     running = True
 
     while running:
@@ -96,7 +154,7 @@ def run_game(player_id, net_client):
         players_data = state.get("players", {}) 
         
         my_pts = players_data.get(player_id, {}).get("points", 0)
-        my_nrg = players_data.get(player_id, {}).get("energy", 100)
+        my_nrg = players_data.get(player_id, {}).get("energy", 0)
         
         my_data = players_data.get(player_id)
         player_rect = pygame.Rect(0, 0, 40, 55)
@@ -107,16 +165,32 @@ def run_game(player_id, net_client):
             if event.type == pygame.QUIT:
                 running = False
                 
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
-                if hacking_mode:
-                    hacking_mode = False
-                    if active_terminal_id and not terms_state.get(active_terminal_id, {}).get("is_solved"):
-                        net_client.send({"type": "action", "action": "hack_terminal", "terminal_id": active_terminal_id})
-                else:
+            if hacking_mode:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        hacking_mode = False
+                        user_text = ""
+                    elif event.key == pygame.K_RETURN:
+                        if active_terminal_id and user_text.strip():
+                            net_client.send({
+                                "type": "action", 
+                                "action": "submit_flag", 
+                                "terminal_id": active_terminal_id,
+                                "flag": user_text
+                            })
+                        hacking_mode = False
+                        user_text = ""
+                    elif event.key == pygame.K_BACKSPACE:
+                        user_text = user_text[:-1]
+                    else:
+                        user_text += event.unicode
+            else:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
                     for t_id, t_rect in terminal_rects.items():
                         if player_rect.colliderect(t_rect.inflate(40, 40)) and not terms_state.get(t_id, {}).get("is_solved"):
                             hacking_mode = True
                             active_terminal_id = t_id
+                            user_text = ""
                             break
                             
                     for d_id, d_rect in door_rects.items():
@@ -124,7 +198,7 @@ def run_game(player_id, net_client):
                             net_client.send({"type": "action", "action": "open_door", "door_id": d_id})
 
         if not has_spawned:
-            net_client.send({"type": "action", "action": "move", "x": 480, "y": 320, "dir": "down"})
+            net_client.send({"type": "action", "action": "move", "x": 480, "y": 580, "dir": "down"})
             has_spawned = True
             
         if my_data and not hacking_mode:
@@ -166,7 +240,8 @@ def run_game(player_id, net_client):
 
         for t_id, t_rect in terminal_rects.items():
             t_data = terms_state.get(t_id, {})
-            vis = terminal_visuals.get(t_id, {"tier": "?", "color": TERMINAL_COLOR, "reward": 0})
+            vis = terminal_visuals.get(t_id, {"tier": "?", "color": TERMINAL_COLOR})
+            reward = t_data.get("reward", 0)
             
             draw_color = (100, 100, 100) if t_data.get("is_solved") else vis["color"]
             pygame.draw.rect(screen, draw_color, t_rect)
@@ -176,8 +251,8 @@ def run_game(player_id, net_client):
             screen.blit(tier_text, text_rect)
             
             if not t_data.get("is_solved"):
-                info_text = tooltip_font.render(f"+{vis['reward']} Pts", True, (100, 100, 100))
-                screen.blit(info_text, (t_rect.x - 5, t_rect.y - 20))
+                info_text = tooltip_font.render(f"+{reward} Pts/Nrg", True, (100, 100, 100))
+                screen.blit(info_text, (t_rect.x - 15, t_rect.y - 20))
                 
                 if player_rect.colliderect(t_rect.inflate(40, 40)):
                     prompt = tooltip_font.render("[E] Retas Soal", True, (255, 255, 255))
@@ -186,20 +261,20 @@ def run_game(player_id, net_client):
         for d_id, d_rect in door_rects.items():
             d_data = doors_state.get(d_id, {})
             is_open = d_data.get("is_open")
-            req_pts = 50 if d_id == "door_1" else 150
+            req_energy = d_data.get("required_energy", 0)
             
             color = DOOR_OPEN if is_open else DOOR_COLOR
             pygame.draw.rect(screen, color, d_rect)
             
             if not is_open:
-                req_text = tooltip_font.render(f"Butuh: {req_pts} Pts", True, (255, 255, 255))
+                req_text = tooltip_font.render(f"Butuh: {req_energy} Nrg", True, (255, 255, 255))
                 screen.blit(req_text, (d_rect.x - 30, d_rect.y - 20))
                 
                 if player_rect.colliderect(d_rect.inflate(40, 40)):
-                    if my_pts >= req_pts:
+                    if my_nrg >= req_energy:
                         prompt = tooltip_font.render("[E] Buka Pintu", True, (255, 255, 255))
                     else:
-                        prompt = tooltip_font.render("Poin Kurang!", True, (255, 50, 50))
+                        prompt = tooltip_font.render("Energy Kurang!", True, (255, 50, 50))
                     screen.blit(prompt, (d_rect.x - 20, d_rect.bottom + 5))
 
         for pid, p_data in players_data.items():
@@ -230,19 +305,38 @@ def run_game(player_id, net_client):
             overlay.fill((0, 0, 0, 200))
             screen.blit(overlay, (0, 0))
             
-            box_width, box_height = 600, 400
+            box_width, box_height = 800, 500
             box_x = WIDTH//2 - box_width//2
             box_y = HEIGHT//2 - box_height//2
             
             active_vis = terminal_visuals.get(active_terminal_id, {})
+            active_data = terms_state.get(active_terminal_id, {})
             
             pygame.draw.rect(screen, (30, 30, 40), (box_x, box_y, box_width, box_height), border_radius=10)
             pygame.draw.rect(screen, active_vis.get("color", TERMINAL_COLOR), (box_x, box_y, box_width, box_height), width=3, border_radius=10)
             
             title = font.render(f"--- MERETAS TERMINAL TIER {active_vis.get('tier', '?')} ---", True, (255, 255, 255))
-            desc = font.render("Simulasi selesai. Tekan 'E' untuk mengklaim poin.", True, (150, 150, 150))
-            screen.blit(title, (box_x + 100, box_y + 50))
-            screen.blit(desc, (box_x + 50, box_y + 150))
+            screen.blit(title, (box_x + 30, box_y + 30))
+            
+            question_str = active_data.get("question", "Tunggu data dari server...")
+            q_text = question_font.render(question_str, True, (200, 200, 200))
+            screen.blit(q_text, (box_x + 30, box_y + 100))
+            
+            input_box = pygame.Rect(box_x + 30, box_y + 200, box_width - 60, 40)
+            pygame.draw.rect(screen, (10, 10, 15), input_box)
+            pygame.draw.rect(screen, active_vis.get("color", TERMINAL_COLOR), input_box, 2)
+            
+            txt_surface = font.render(user_text, True, (255, 255, 255))
+            screen.blit(txt_surface, (input_box.x + 10, input_box.y + 10))
+            
+            if time.time() % 1 > 0.5:
+                cursor_x = input_box.x + 10 + txt_surface.get_width()
+                pygame.draw.rect(screen, (255, 255, 255), (cursor_x, input_box.y + 10, 2, 20))
+                
+            guide1 = tooltip_font.render("Ketik jawaban (FLAG) dan tekan ENTER untuk submit.", True, (150, 150, 150))
+            guide2 = tooltip_font.render("Tekan ESC untuk membatalkan proses peretasan.", True, (150, 150, 150))
+            screen.blit(guide1, (box_x + 30, box_y + 400))
+            screen.blit(guide2, (box_x + 30, box_y + 420))
 
         pygame.display.flip()
         clock.tick(FPS)
