@@ -21,6 +21,10 @@ class GameLogic:
 
         if client_id not in self.players:
             self.players[client_id] = PlayerSession(client_id)
+            self.network.broadcast({
+                "type": "sync_map",
+                "map_state": self.room.get_full_state()
+            })
             
         player = self.players[client_id]
 
@@ -35,39 +39,51 @@ class GameLogic:
             })
             return {"type": "ack", "message": "move_processed"}
 
-        elif action == "hack_terminal":
+        elif action == "submit_flag":
             term_id = data.get("terminal_id")
+            submitted_flag = data.get("flag", "").strip().lower()
+            
             if term_id in self.room.terminals and not self.room.terminals[term_id]["is_solved"]:
-                self.room.terminals[term_id]["is_solved"] = True
-                player.points += self.room.terminals[term_id]["reward"]
-                logging.info(f"Player {client_id} meretas {term_id}! Poin: {player.points}")
+                correct_flag = self.room.terminals[term_id].get("flag", "").lower()
                 
-                self.network.broadcast({
-                    "type": "sync_map",
-                    "map_state": self.room.get_full_state()
-                })
-                self.network.broadcast({
-                    "type": "sync_players",
-                    "players": {pid: p.to_dict() for pid, p in self.players.items()}
-                })
-            return None
-
-        elif action == "open_door":
-            door_id = data.get("door_id")
-            if door_id in self.room.doors and not self.room.doors[door_id]["is_open"]:
-                req_pts = self.room.doors[door_id]["required_pts"]
-                
-                if (player.points - req_pts) > 0:
-                    self.room.doors[door_id]["is_open"] = True
-                    player.points -= req_pts 
-                    logging.info(f"Pintu {door_id} dibuka oleh {client_id}")
+                if submitted_flag == correct_flag:
+                    self.room.terminals[term_id]["is_solved"] = True
+                    reward = self.room.terminals[term_id]["reward"]
+                    player.points += reward
+                    player.energy += reward
                     
                     self.network.broadcast({
                         "type": "sync_map",
                         "map_state": self.room.get_full_state()
                     })
+                    self.network.broadcast({
+                        "type": "sync_players",
+                        "players": {pid: p.to_dict() for pid, p in self.players.items()}
+                    })
+                    return {"type": "notify", "message": "Flag benar!"}
                 else:
-                    return {"type": "error", "message": f"Poin tidak cukup! Butuh > {req_pts} poin."}
+                    return {"type": "notify", "message": "Flag salah!"}
+            return None
+
+        elif action == "open_door":
+            door_id = data.get("door_id")
+            if door_id in self.room.doors and not self.room.doors[door_id]["is_open"]:
+                req_energy = self.room.doors[door_id]["required_energy"]
+                
+                if (player.energy - req_energy) >= 0:
+                    self.room.doors[door_id]["is_open"] = True
+                    player.energy -= req_energy 
+                    
+                    self.network.broadcast({
+                        "type": "sync_map",
+                        "map_state": self.room.get_full_state()
+                    })
+                    self.network.broadcast({
+                        "type": "sync_players",
+                        "players": {pid: p.to_dict() for pid, p in self.players.items()}
+                    })
+                else:
+                    return {"type": "error", "message": "Energy tidak cukup!"}
             return None
             
         return {"type": "error", "message": "Unknown action"}
