@@ -6,7 +6,7 @@ import logging
 class GameLogic:
     def __init__(self, network_handler):
         self.network = network_handler
-        self.players = {}  
+        self.players : dict[str, PlayerSession] = {}  
         self.room = RoomState()
         
         self.battle_duration = 300 
@@ -67,11 +67,11 @@ class GameLogic:
 
         elif action == "open_door":
             door_id = data.get("door_id")
-            if door_id in self.room.doors and not self.room.doors[door_id]["is_open"]:
+            if door_id in self.room.doors and not player.door_open_state[door_id]:
                 req_energy = self.room.doors[door_id]["required_energy"]
                 
                 if (player.energy - req_energy) >= 0:
-                    self.room.doors[door_id]["is_open"] = True
+                    player.door_open_state[door_id] = True
                     player.energy -= req_energy 
                     
                     self.network.broadcast({
