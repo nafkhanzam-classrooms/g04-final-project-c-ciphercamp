@@ -14,6 +14,20 @@ class PlayerSession:
             "door_sec1": False,
             "door_sec2": False
         }
+        self.terminal_solve_state : dict[str, bool] = {
+            "term_tut": False,
+            "term_e1": False,
+            "term_e2": False,
+            "term_e3": False,
+            "term_m1":False,
+            "term_m2": False,
+            "term_m3": False,
+            "term_h1": False,
+            "term_h2": False,
+            "term_h3": False,
+            "term_sec1":False,
+            "term_sec2": False
+        }
         
         
     def to_dict(self):
@@ -24,5 +38,6 @@ class PlayerSession:
             "dir": self.dir,
             "points": self.points,
             "energy": self.energy,
-            "door_open_state": self.door_open_state
+            "door_open_state": self.door_open_state,
+            "terminal_solve_state": self.terminal_solve_state
         }

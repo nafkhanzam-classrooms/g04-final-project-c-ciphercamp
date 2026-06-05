@@ -43,11 +43,11 @@ class GameLogic:
             term_id = data.get("terminal_id")
             submitted_flag = data.get("flag", "").strip().lower()
             
-            if term_id in self.room.terminals and not self.room.terminals[term_id]["is_solved"]:
+            if term_id in self.room.terminals and not player.terminal_solve_state[term_id]:
                 correct_flag = self.room.terminals[term_id].get("flag", "").lower()
                 
                 if submitted_flag == correct_flag:
-                    self.room.terminals[term_id]["is_solved"] = True
+                    player.terminal_solve_state[term_id] = True
                     reward = self.room.terminals[term_id]["reward"]
                     player.points += reward
                     player.energy += reward
