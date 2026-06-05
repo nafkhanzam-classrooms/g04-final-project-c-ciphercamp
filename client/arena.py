@@ -188,14 +188,14 @@ def run_game(player_id, net_client):
             else:
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
                     for t_id, t_rect in terminal_rects.items():
-                        if player_rect.colliderect(t_rect.inflate(40, 40)) and not terms_state.get(t_id, {}).get("is_solved"):
+                        if player_rect.colliderect(t_rect.inflate(40, 40)) and my_data and not my_data.get("terminal_solve_state", {}).get(t_id):
                             hacking_mode = True
                             active_terminal_id = t_id
                             user_text = ""
                             break
                             
                     for d_id, d_rect in door_rects.items():
-                        if my_data and  player_rect.colliderect(d_rect.inflate(40, 40)) and not my_data.get("door_open_state", {}).get(d_id):
+                        if player_rect.colliderect(d_rect.inflate(40, 40)) and my_data and not my_data.get("door_open_state", {}).get(d_id):
                             net_client.send({"type": "action", "action": "open_door", "door_id": d_id})
 
         if not has_spawned:
@@ -243,15 +243,18 @@ def run_game(player_id, net_client):
             t_data = terms_state.get(t_id, {})
             vis = terminal_visuals.get(t_id, {"tier": "?", "color": TERMINAL_COLOR})
             reward = t_data.get("reward", 0)
+            is_solved = None
+            if my_data:
+                is_solved = my_data.get("terminal_solve_state", {}).get(t_id)
             
-            draw_color = (100, 100, 100) if t_data.get("is_solved") else vis["color"]
+            draw_color = (100, 100, 100) if is_solved else vis["color"]
             pygame.draw.rect(screen, draw_color, t_rect)
             
             tier_text = font.render(vis["tier"], True, (255, 255, 255))
             text_rect = tier_text.get_rect(center=t_rect.center)
             screen.blit(tier_text, text_rect)
             
-            if not t_data.get("is_solved"):
+            if not is_solved:
                 info_text = tooltip_font.render(f"+{reward} Pts/Nrg", True, (100, 100, 100))
                 screen.blit(info_text, (t_rect.x - 15, t_rect.y - 20))
                 
