@@ -1,12 +1,12 @@
 class RoomState:
     def __init__(self):
         self.doors = {
-            "door_main": {"required_energy": 50, "is_open": False},
-            "door_left": {"required_energy": 100, "is_open": False},
-            "door_right": {"required_energy": 200, "is_open": False},
-            "door_top": {"required_energy": 500, "is_open": False},
-            "door_sec1": {"required_energy": 150, "is_open": False},
-            "door_sec2": {"required_energy": 300, "is_open": False}
+            "door_main": {"required_energy": 50},
+            "door_left": {"required_energy": 100},
+            "door_right": {"required_energy": 200},
+            "door_top": {"required_energy": 500},
+            "door_sec1": {"required_energy": 150},
+            "door_sec2": {"required_energy": 300}
         }
         
         self.terminals = {

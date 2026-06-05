@@ -157,6 +157,7 @@ def run_game(player_id, net_client):
         my_nrg = players_data.get(player_id, {}).get("energy", 0)
         
         my_data = players_data.get(player_id)
+        
         player_rect = pygame.Rect(0, 0, 40, 55)
         if my_data:
             player_rect.topleft = (my_data.get("x", 0), my_data.get("y", 0))
@@ -194,7 +195,7 @@ def run_game(player_id, net_client):
                             break
                             
                     for d_id, d_rect in door_rects.items():
-                        if player_rect.colliderect(d_rect.inflate(40, 40)) and not doors_state.get(d_id, {}).get("is_open"):
+                        if my_data and  player_rect.colliderect(d_rect.inflate(40, 40)) and not my_data.get("door_open_state", {}).get(d_id):
                             net_client.send({"type": "action", "action": "open_door", "door_id": d_id})
 
         if not has_spawned:
@@ -223,7 +224,7 @@ def run_game(player_id, net_client):
                         break
                         
                 for d_id, d_rect in door_rects.items():
-                    if not doors_state.get(d_id, {}).get("is_open") and test_rect.colliderect(d_rect):
+                    if not my_data.get("door_open_state", {}).get(d_id) and test_rect.colliderect(d_rect):
                         collision = True
                         break
                         
@@ -260,7 +261,9 @@ def run_game(player_id, net_client):
 
         for d_id, d_rect in door_rects.items():
             d_data = doors_state.get(d_id, {})
-            is_open = d_data.get("is_open")
+            is_open = None
+            if my_data:
+                is_open = my_data.get("door_open_state", {}).get(d_id)
             req_energy = d_data.get("required_energy", 0)
             
             color = DOOR_OPEN if is_open else DOOR_COLOR
