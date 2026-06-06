@@ -7,6 +7,12 @@ from shared.config import *
 
 _ASSET_SPRITES_CACHE: dict[int, dict] = {}
 
+
+def rect_from_data(data):
+    if not data:
+        return None
+    return pygame.Rect(data.get("x", 0), data.get("y", 0), data.get("w", 0), data.get("h", 0))
+
 def get_sprites_for_asset(asset_index: int):
     # cached loader for player sprites per asset folder player{n}
     if asset_index in _ASSET_SPRITES_CACHE:
@@ -136,19 +142,10 @@ def run_game(player_id, net_client):
         "term_sec2": pygame.Rect(800, 500, 40, 40) 
     }
 
-    terminal_visuals = {
-        "term_tut": {"tier": "T", "color": (150, 150, 150)},
-        "term_e1": {"tier": "E", "color": (50, 150, 200)},
-        "term_e2": {"tier": "E", "color": (50, 150, 200)},
-        "term_e3": {"tier": "E", "color": (50, 150, 200)},
-        "term_m1": {"tier": "M", "color": (200, 150, 50)},
-        "term_m2": {"tier": "M", "color": (200, 150, 50)},
-        "term_m3": {"tier": "M", "color": (200, 150, 50)},
-        "term_h1": {"tier": "H", "color": (200, 50, 200)},
-        "term_h2": {"tier": "H", "color": (200, 50, 200)},
-        "term_h3": {"tier": "H", "color": (200, 50, 200)},
-        "term_sec1": {"tier": "S", "color": (255, 100, 100)},
-        "term_sec2": {"tier": "S", "color": (255, 100, 100)}
+    tier_visuals = {
+        "easy": {"label": "E", "color": (50, 150, 200)},
+        "medium": {"label": "M", "color": (200, 150, 50)},
+        "hard": {"label": "H", "color": (200, 50, 200)},
     }
 
     has_spawned = False
@@ -161,10 +158,17 @@ def run_game(player_id, net_client):
         state = net_client.game_state
         map_state = state.get("map_state", {})
         terms_state = map_state.get("terminals", {})
-        doors_state = map_state.get("doors", {}) 
+        doors_state = map_state.get("doors", {})
+        rooms_state = map_state.get("rooms", {})
+        walls_state = map_state.get("walls", [])
         players_data = state.get("players", {}) 
         game_started = state.get("game_started", False)
         lobby_state = state.get("lobby", {})
+
+        runtime_rooms = [rect_from_data(room) for room in rooms_state.values()] if rooms_state else rooms
+        runtime_walls = [rect_from_data(wall) for wall in walls_state] if walls_state else walls
+        runtime_doors = {door_id: rect_from_data(door_data.get("rect", door_data)) for door_id, door_data in doors_state.items()} if doors_state else door_rects
+        runtime_terminals = {terminal_id: rect_from_data(terminal_data.get("rect", terminal_data)) for terminal_id, terminal_data in terms_state.items()} if terms_state else terminal_rects
         
         my_pts = players_data.get(player_id, {}).get("points", 0)
         my_nrg = players_data.get(player_id, {}).get("energy", 0)
@@ -203,14 +207,14 @@ def run_game(player_id, net_client):
                         user_text += event.unicode
             else:
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
-                    for t_id, t_rect in terminal_rects.items():
+                    for t_id, t_rect in runtime_terminals.items():
                         if player_rect.colliderect(t_rect.inflate(40, 40)) and my_data and not my_data.get("terminal_solve_state", {}).get(t_id):
                             hacking_mode = True
                             active_terminal_id = t_id
                             user_text = ""
                             break
                             
-                    for d_id, d_rect in door_rects.items():
+                    for d_id, d_rect in runtime_doors.items():
                         if player_rect.colliderect(d_rect.inflate(40, 40)) and my_data and not my_data.get("door_open_state", {}).get(d_id):
                             net_client.send({"type": "action", "action": "open_door", "door_id": d_id})
 
@@ -234,12 +238,12 @@ def run_game(player_id, net_client):
                 test_rect = pygame.Rect(new_x, new_y, 40, 55)
                 collision = False
                 
-                for w in walls:
+                for w in runtime_walls:
                     if test_rect.colliderect(w):
                         collision = True
                         break
                         
-                for d_id, d_rect in door_rects.items():
+                for d_id, d_rect in runtime_doors.items():
                     if not my_data.get("door_open_state", {}).get(d_id) and test_rect.colliderect(d_rect):
                         collision = True
                         break
@@ -249,15 +253,15 @@ def run_game(player_id, net_client):
 
         screen.fill(BG_COLOR)
 
-        for r in rooms:
+        for r in runtime_rooms:
             pygame.draw.rect(screen, FLOOR_COLOR, r)
             
-        for w in walls:
+        for w in runtime_walls:
             pygame.draw.rect(screen, WALL_COLOR, w)
 
-        for t_id, t_rect in terminal_rects.items():
+        for t_id, t_rect in runtime_terminals.items():
             t_data = terms_state.get(t_id, {})
-            vis = terminal_visuals.get(t_id, {"tier": "?", "color": TERMINAL_COLOR})
+            vis = tier_visuals.get(t_data.get("tier", "easy"), {"label": "?", "color": TERMINAL_COLOR})
             reward = t_data.get("reward", 0)
             is_solved = None
             if my_data:
@@ -266,7 +270,7 @@ def run_game(player_id, net_client):
             draw_color = (100, 100, 100) if is_solved else vis["color"]
             pygame.draw.rect(screen, draw_color, t_rect)
             
-            tier_text = font.render(vis["tier"], True, (255, 255, 255))
+            tier_text = font.render(vis["label"], True, (255, 255, 255))
             text_rect = tier_text.get_rect(center=t_rect.center)
             screen.blit(tier_text, text_rect)
             
@@ -278,7 +282,7 @@ def run_game(player_id, net_client):
                     prompt = tooltip_font.render("[E] Retas Soal", True, (255, 255, 255))
                     screen.blit(prompt, (t_rect.x - 20, t_rect.bottom + 5))
 
-        for d_id, d_rect in door_rects.items():
+        for d_id, d_rect in runtime_doors.items():
             d_data = doors_state.get(d_id, {})
             is_open = None
             if my_data:
@@ -363,8 +367,8 @@ def run_game(player_id, net_client):
             box_x = WIDTH//2 - box_width//2
             box_y = HEIGHT//2 - box_height//2
             
-            active_vis = terminal_visuals.get(active_terminal_id, {})
             active_data = terms_state.get(active_terminal_id, {})
+            active_vis = tier_visuals.get(active_data.get("tier", "easy"), {"label": "?", "color": TERMINAL_COLOR})
             
             pygame.draw.rect(screen, (30, 30, 40), (box_x, box_y, box_width, box_height), border_radius=10)
             pygame.draw.rect(screen, active_vis.get("color", TERMINAL_COLOR), (box_x, box_y, box_width, box_height), width=3, border_radius=10)
