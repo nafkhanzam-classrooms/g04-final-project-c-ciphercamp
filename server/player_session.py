@@ -1,11 +1,12 @@
 class PlayerSession:
-    def __init__(self, player_id, start_x=480, start_y=580):
+    def __init__(self, player_id, start_x=480, start_y=580, asset_index: int = 1):
         self.player_id = player_id
         self.x = start_x
         self.y = start_y
         self.dir = "down"
         self.points = 0
         self.energy = 200
+        self.asset = asset_index
         self.door_open_state : dict[str, bool] = {
             "door_main": False,
             "door_left": False,
@@ -36,6 +37,7 @@ class PlayerSession:
             "x": self.x,
             "y": self.y,
             "dir": self.dir,
+            "asset": getattr(self, "asset", 1),
             "points": self.points,
             "energy": self.energy,
             "door_open_state": self.door_open_state,

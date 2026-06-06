@@ -5,9 +5,14 @@ import time
 from client.network_client import NetworkClient
 from shared.config import *
 
-def load_player_sprites():
-    pygame.init()
-    base_path = os.path.join('assets', 'player1')
+_ASSET_SPRITES_CACHE: dict[int, dict] = {}
+
+def get_sprites_for_asset(asset_index: int):
+    # cached loader for player sprites per asset folder player{n}
+    if asset_index in _ASSET_SPRITES_CACHE:
+        return _ASSET_SPRITES_CACHE[asset_index]
+
+    base_path = os.path.join('assets', f'player{asset_index}')
     try:
         sprites = {
             'up': pygame.image.load(os.path.join(base_path, 'player_up.png')).convert_alpha(),
@@ -17,9 +22,10 @@ def load_player_sprites():
         }
         for key in sprites:
             sprites[key] = pygame.transform.scale(sprites[key], (40, 55))
-        return sprites, True
+        _ASSET_SPRITES_CACHE[asset_index] = sprites
+        return sprites
     except Exception:
-        return None, False
+        return None
 
 def run_game(player_id, net_client):
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -36,7 +42,12 @@ def run_game(player_id, net_client):
         tooltip_font = pygame.font.SysFont(None, 18)
         question_font = pygame.font.SysFont(None, 20)
 
-    player_sprites, has_sprites = load_player_sprites()
+    pygame.init()
+    # attempt to preload default asset 1 (optional)
+    try:
+        get_sprites_for_asset(1)
+    except:
+        pass
 
     rooms = [
         pygame.Rect(400, 550, 200, 100), 
@@ -152,6 +163,8 @@ def run_game(player_id, net_client):
         terms_state = map_state.get("terminals", {})
         doors_state = map_state.get("doors", {}) 
         players_data = state.get("players", {}) 
+        game_started = state.get("game_started", False)
+        lobby_state = state.get("lobby", {})
         
         my_pts = players_data.get(player_id, {}).get("points", 0)
         my_nrg = players_data.get(player_id, {}).get("energy", 0)
@@ -166,6 +179,9 @@ def run_game(player_id, net_client):
             if event.type == pygame.QUIT:
                 running = False
                 
+            if not game_started:
+                continue
+
             if hacking_mode:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
@@ -198,11 +214,11 @@ def run_game(player_id, net_client):
                         if player_rect.colliderect(d_rect.inflate(40, 40)) and my_data and not my_data.get("door_open_state", {}).get(d_id):
                             net_client.send({"type": "action", "action": "open_door", "door_id": d_id})
 
-        if not has_spawned:
+        if game_started and not has_spawned:
             net_client.send({"type": "action", "action": "move", "x": 480, "y": 580, "dir": "down"})
             has_spawned = True
             
-        if my_data and not hacking_mode:
+        if game_started and my_data and not hacking_mode:
             new_x, new_y = my_data["x"], my_data["y"]
             current_dir = my_data.get("dir", "down")
             speed = 5
@@ -287,9 +303,13 @@ def run_game(player_id, net_client):
             p_x = p_data.get("x", 0)
             p_y = p_data.get("y", 0)
             p_dir = p_data.get("dir", "down")
-            
-            if has_sprites and player_sprites and p_dir in player_sprites:
-                screen.blit(player_sprites[p_dir], (p_x, p_y)) 
+            asset_idx = p_data.get("asset", 1)
+            sprites = get_sprites_for_asset(asset_idx)
+            if sprites and p_dir in sprites:
+                try:
+                    screen.blit(sprites[p_dir], (p_x, p_y))
+                except Exception:
+                    pygame.draw.rect(screen, PLAYER_OTHER_COLOR, (p_x, p_y, 40, 55))
             else:
                 p_color = PLAYER_ME_COLOR if pid == player_id else PLAYER_OTHER_COLOR
                 pygame.draw.rect(screen, p_color, (p_x, p_y, 40, 55))
@@ -306,7 +326,35 @@ def run_game(player_id, net_client):
         hud_txt = font.render(f"PID: {player_id} | ENERGY: {my_nrg} | POINTS: {my_pts} | PING: {ping}ms", True, TEXT_COLOR)
         screen.blit(hud_txt, (20, HEIGHT-30))
 
-        if hacking_mode and active_terminal_id:
+        if game_started:
+            battle_duration = state.get("battle_duration", 0)
+            game_start_time = state.get("game_start_time")
+            remaining = battle_duration
+            if game_start_time:
+                remaining = max(0, int(battle_duration - (time.time() - game_start_time)))
+
+            minutes = remaining // 60
+            seconds = remaining % 60
+            timer_text = font.render(f"WAKTU {minutes:02d}:{seconds:02d}", True, (255, 255, 255))
+            timer_box = pygame.Surface((timer_text.get_width() + 24, 32))
+            timer_box.set_alpha(200)
+            timer_box.fill((20, 20, 30))
+            screen.blit(timer_box, (WIDTH - timer_box.get_width() - 20, 15))
+            screen.blit(timer_text, (WIDTH - timer_text.get_width() - 32, 21))
+        else:
+            current_players = lobby_state.get("current_players", len(players_data))
+            max_players = lobby_state.get("max_players", 0)
+            waiting_text = font.render(f"Menunggu player ({current_players}/{max_players})", True, (255, 255, 255))
+            waiting_box = pygame.Surface((waiting_text.get_width() + 24, 32))
+            waiting_box.set_alpha(220)
+            waiting_box.fill((30, 30, 40))
+            screen.blit(waiting_box, (WIDTH//2 - waiting_box.get_width()//2, HEIGHT//2 - 80))
+            screen.blit(waiting_text, (WIDTH//2 - waiting_text.get_width()//2, HEIGHT//2 - 74))
+
+            hint = tooltip_font.render("Game akan mulai otomatis saat room penuh.", True, (220, 220, 220))
+            screen.blit(hint, (WIDTH//2 - hint.get_width()//2, HEIGHT//2 - 45))
+
+        if game_started and hacking_mode and active_terminal_id:
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 200))
             screen.blit(overlay, (0, 0))
@@ -346,3 +394,35 @@ def run_game(player_id, net_client):
 
         pygame.display.flip()
         clock.tick(FPS)
+        # handle game over display if server sent final leaderboard
+        game_over = state.get("game_over")
+        if game_over:
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 220))
+            screen.blit(overlay, (0, 0))
+
+            title = font.render("-- GAME OVER --", True, (255, 255, 255))
+            screen.blit(title, (WIDTH//2 - title.get_width()//2, 60))
+
+            lb = game_over.get("leaderboard", [])
+            for i, entry in enumerate(lb[:10]):
+                text = f"{i+1}. {entry.get('player_id')} - {entry.get('points')} pts"
+                txt_s = tooltip_font.render(text, True, (255, 255, 255))
+                screen.blit(txt_s, (WIDTH//2 - txt_s.get_width()//2, 140 + i*30))
+
+            sub = tooltip_font.render("Tekan ESC atau tutup jendela untuk keluar.", True, (200, 200, 200))
+            screen.blit(sub, (WIDTH//2 - sub.get_width()//2, HEIGHT - 80))
+            pygame.display.flip()
+
+            # wait until user exits
+            waiting = True
+            while waiting:
+                for ev in pygame.event.get():
+                    if ev.type == pygame.QUIT:
+                        waiting = False
+                        running = False
+                    if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                        waiting = False
+                        running = False
+                clock.tick(10)
+            break

@@ -12,9 +12,10 @@ logging.basicConfig(
 )
 
 class NetworkHandler:
-    def __init__(self, game_logic_callback, host='0.0.0.0', port=5555):
+    def __init__(self, game_logic_callback, host='0.0.0.0', port=5555, max_players=4):
         self.host = host
         self.port = port
+        self.max_players = max_players
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
@@ -22,6 +23,7 @@ class NetworkHandler:
         self.lock = threading.Lock()
         
         self.process_action = game_logic_callback
+        self.on_disconnect = None
 
     def start(self):
         try:
@@ -81,12 +83,35 @@ class NetworkHandler:
                         if not client_id:
                             self.send_to_client(client_socket, {"type": "error", "message": "Missing player_id"})
                             continue
-                            
+                        # enforce max players configured by the server
                         with self.lock:
+                            if len(self.clients) >= self.max_players:
+                                logging.info(f"Rejecting {client_id} from {addr}: room full")
+                                self.send_to_client(client_socket, {"type": "join_ack", "status": "full", "message": "Room penuh", "current_players": len(self.clients), "max_players": self.max_players})
+                                try:
+                                    client_socket.close()
+                                except:
+                                    pass
+                                continue
+
+                            # register client
                             self.clients[client_id] = {"socket": client_socket, "addr": addr}
-                        
+
                         logging.info(f"Player {client_id} (Re)Connected dari {addr}")
-                        self.send_to_client(client_socket, {"type": "join_ack", "status": "success"})
+
+                        # let game logic handle join (assign assets, broadcast state)
+                        try:
+                            resp = self.process_action(client_id, {"action": "join"})
+                        except Exception:
+                            resp = None
+
+                        if resp and resp.get("type") == "join_ack":
+                            # forward join ack (contains assigned asset or full)
+                            self.send_to_client(client_socket, resp)
+                        else:
+                            # default ack
+                            self.send_to_client(client_socket, {"type": "join_ack", "status": "success", "current_players": len(self.clients), "max_players": self.max_players})
+
                         continue
                         
                     if packet_type == "action" and client_id:
@@ -107,6 +132,11 @@ class NetworkHandler:
         with self.lock:
             if client_id and client_id in self.clients:
                 del self.clients[client_id]
+        if client_id and callable(self.on_disconnect):
+            try:
+                self.on_disconnect(client_id)
+            except Exception as e:
+                logging.error(f"Error pada on_disconnect untuk {client_id}: {e}")
         client_socket.close()
         logging.info(f"Koneksi ditutup untuk {addr} (Player {client_id}).")
 
