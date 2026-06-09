@@ -13,6 +13,20 @@ def rect_from_data(data):
         return None
     return pygame.Rect(data.get("x", 0), data.get("y", 0), data.get("w", 0), data.get("h", 0))
 
+
+def get_spawn_position(map_state):
+    rooms_state = map_state.get("rooms", {}) if map_state else {}
+    spawn_data = rooms_state.get("room_spawn")
+
+    if spawn_data:
+        spawn_rect = rect_from_data(spawn_data)
+        if spawn_rect:
+            spawn_x = spawn_rect.centerx - 20
+            spawn_y = spawn_rect.centery - 27
+            return spawn_x, spawn_y
+
+    return 480, 580
+
 def get_sprites_for_asset(asset_index: int):
     # cached loader for player sprites per asset folder player{n}
     if asset_index in _ASSET_SPRITES_CACHE:
@@ -32,6 +46,57 @@ def get_sprites_for_asset(asset_index: int):
         return sprites
     except Exception:
         return None
+
+def get_ranked_players(players_data):
+    ranked = []
+    for pid, p_data in players_data.items():
+        ranked.append({
+            "player_id": pid,
+            "points": p_data.get("points", 0),
+            "energy": p_data.get("energy", 0)
+        })
+
+    ranked.sort(key=lambda item: (-item["points"], item["player_id"].lower()))
+    return ranked
+
+def draw_live_leaderboard(screen, players_data, player_id, font, tooltip_font):
+    if not players_data:
+        return
+
+    ranked = get_ranked_players(players_data)
+    my_rank = next((idx + 1 for idx, entry in enumerate(ranked) if entry["player_id"] == player_id), "-")
+
+    box_x, box_y = 15, 15
+    box_width = 270
+    row_height = 24
+    visible_rows = min(5, len(ranked))
+    box_height = 72 + (visible_rows * row_height)
+
+    panel = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+    panel.fill((10, 10, 20, 210))
+    screen.blit(panel, (box_x, box_y))
+
+    pygame.draw.rect(screen, (90, 180, 255), (box_x, box_y, box_width, box_height), 2, border_radius=8)
+
+    title_text = font.render("LIVE LEADERBOARD", True, (255, 255, 255))
+    screen.blit(title_text, (box_x + 12, box_y + 10))
+
+    rank_text = tooltip_font.render(f"Posisi kamu: #{my_rank}", True, (120, 255, 120))
+    screen.blit(rank_text, (box_x + 12, box_y + 38))
+
+    start_y = box_y + 64
+    for i, entry in enumerate(ranked[:visible_rows]):
+        is_me = entry["player_id"] == player_id
+        text_color = (120, 255, 120) if is_me else (235, 235, 235)
+
+        name = entry["player_id"]
+        if len(name) > 13:
+            name = name[:10] + "..."
+
+        row_text = f"{i + 1}. {name:<13} {entry['points']} pts"
+        row_surface = tooltip_font.render(row_text, True, text_color)
+        screen.blit(row_surface, (box_x + 12, start_y + i * row_height))
+
 
 def run_game(player_id, net_client):
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -219,7 +284,8 @@ def run_game(player_id, net_client):
                             net_client.send({"type": "action", "action": "open_door", "door_id": d_id})
 
         if game_started and not has_spawned:
-            net_client.send({"type": "action", "action": "move", "x": 480, "y": 580, "dir": "down"})
+            spawn_x, spawn_y = get_spawn_position(map_state)
+            net_client.send({"type": "action", "action": "move", "x": spawn_x, "y": spawn_y, "dir": "down"})
             has_spawned = True
             
         if game_started and my_data and not hacking_mode:
@@ -331,6 +397,8 @@ def run_game(player_id, net_client):
         screen.blit(hud_txt, (20, HEIGHT-30))
 
         if game_started:
+            draw_live_leaderboard(screen, players_data, player_id, font, tooltip_font)
+
             battle_duration = state.get("battle_duration", 0)
             game_start_time = state.get("game_start_time")
             remaining = battle_duration

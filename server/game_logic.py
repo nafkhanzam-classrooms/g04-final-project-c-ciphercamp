@@ -28,6 +28,14 @@ class GameLogic:
             "started": self.game_started
         })
 
+    def _get_spawn_position(self):
+        spawn_room = self.room.rooms.get("room_spawn", {})
+        if spawn_room:
+            spawn_x = spawn_room.get("x", 400) + (spawn_room.get("w", 200) // 2) - 20
+            spawn_y = spawn_room.get("y", 550) + (spawn_room.get("h", 100) // 2) - 27
+            return spawn_x, spawn_y
+        return 480, 580
+
     def _start_game(self):
         if self.game_started:
             return
@@ -70,13 +78,13 @@ class GameLogic:
         if self.game_started and not self.is_battle_active:
             return {"type": "error", "message": "Waktu battle sudah habis!"}
 
-        # Handle explicit join requests so we can assign assets and limit players
+        
         if action == "join":
-            # enforce max players configured on server
+           
             if len(self.players) >= self.max_players:
                 return {"type": "join_ack", "status": "full", "message": "Room penuh", "current_players": len(self.players), "max_players": self.max_players}
 
-            # pick smallest available asset index 1..4
+            
             used = {p.asset for p in self.players.values()}
             assigned = None
             for i in range(1, 5):
@@ -87,9 +95,10 @@ class GameLogic:
             if assigned is None:
                 assigned = 1
 
-            self.players[client_id] = PlayerSession(client_id, asset_index=assigned)
+            spawn_x, spawn_y = self._get_spawn_position()
+            self.players[client_id] = PlayerSession(client_id, start_x=spawn_x, start_y=spawn_y, asset_index=assigned)
 
-            # broadcast updated map and players
+            
             self.network.broadcast({
                 "type": "sync_map",
                 "map_state": self.room.get_full_state()
@@ -106,11 +115,11 @@ class GameLogic:
 
             return {"type": "join_ack", "status": "success", "asset": assigned, "current_players": len(self.players), "max_players": self.max_players, "started": self.game_started}
 
-        # ensure player exists (in case they haven't sent explicit join)
+        
         action = data.get("action")
 
         if client_id not in self.players:
-            # auto-assign an asset if missing
+           
             used = {p.asset for p in self.players.values()}
             assigned = None
             for i in range(1, 5):
@@ -120,7 +129,8 @@ class GameLogic:
             if assigned is None:
                 assigned = 1
 
-            self.players[client_id] = PlayerSession(client_id, asset_index=assigned)
+            spawn_x, spawn_y = self._get_spawn_position()
+            self.players[client_id] = PlayerSession(client_id, start_x=spawn_x, start_y=spawn_y, asset_index=assigned)
             self.network.broadcast({
                 "type": "sync_map",
                 "map_state": self.room.get_full_state()
@@ -167,7 +177,7 @@ class GameLogic:
                         "players": {pid: p.to_dict() for pid, p in self.players.items()}
                     })
 
-                    # check win condition: if this player solved all terminals
+                    
                     if all(player.terminal_solve_state.values()):
                         self._end_game(winner=client_id)
                     return {"type": "notify", "message": "Flag benar!"}
@@ -210,7 +220,7 @@ class GameLogic:
                     self._end_game(reason="time")
                     break
 
-                # check if any player has solved all terminals (redundant safety)
+                
                 for pid, player in list(self.players.items()):
                     if all(player.terminal_solve_state.values()):
                         self._end_game(winner=pid)

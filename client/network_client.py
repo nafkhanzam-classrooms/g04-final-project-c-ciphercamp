@@ -82,12 +82,12 @@ class NetworkClient:
             latency = (time.time() - packet.get("client_time", time.time())) * 1000
             self.game_state["ping"] = int(latency)
         elif p_type == "join_ack":
-            # store join acknowledgement (may include assigned asset or full)
+           
             self.game_state["join_ack"] = packet
             if packet.get("status") == "full":
                 self.game_state["join_full"] = packet
         elif p_type == "game_over":
-            # store final leaderboard and reason
+            
             self.game_state["game_over"] = packet
             self.game_state["game_started"] = False
         elif p_type == "game_start":
@@ -95,7 +95,7 @@ class NetworkClient:
             self.game_state["battle_duration"] = packet.get("battle_duration", 0)
             self.game_state["game_start_time"] = packet.get("start_time")
         elif p_type == "notify":
-            # simple notifications from server
+           
             self.game_state.setdefault("notifications", []).append(packet.get("message"))
         elif p_type == "lobby_state":
             self.game_state["lobby"] = {
