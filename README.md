@@ -2,10 +2,11 @@
 # Network Programming - Final Project [G04]
 
 ## Anggota Kelompok
-| Nama           | NRP        | Kelas     |
-| ---            | ---        | ----------|
-|                |            |           |
-|                |            |           |
+| Nama                        | NRP        | Kelas                    |
+| ---                         | ---        | ----------               |
+| Puspita Wijayanti Kusuma    | 5025241059 | Pemrograman Jaringan C   |
+| Christina Tan               | 5025241060 | Pemrograman Jaringan C   |
+| Athar Bakhtiar Aziz         | 5025241136 | Pemrograman Jaringan C   |
 
 ## Link Youtube (Unlisted)
 Link ditaruh di bawah ini
