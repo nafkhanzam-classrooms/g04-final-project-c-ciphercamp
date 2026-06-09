@@ -53,7 +53,8 @@ def get_ranked_players(players_data):
         ranked.append({
             "player_id": pid,
             "points": p_data.get("points", 0),
-            "energy": p_data.get("energy", 0)
+            "energy": p_data.get("energy", 0),
+            "connected": p_data.get("connected", True)
         })
 
     ranked.sort(key=lambda item: (-item["points"], item["player_id"].lower()))
@@ -93,7 +94,8 @@ def draw_live_leaderboard(screen, players_data, player_id, font, tooltip_font):
         if len(name) > 13:
             name = name[:10] + "..."
 
-        row_text = f"{i + 1}. {name:<13} {entry['points']} pts"
+        status = "" if entry.get("connected", True) else " OFF"
+        row_text = f"{i + 1}. {name:<13} {entry['points']} pts{status}"
         row_surface = tooltip_font.render(row_text, True, text_color)
         screen.blit(row_surface, (box_x + 12, start_y + i * row_height))
 
@@ -283,9 +285,9 @@ def run_game(player_id, net_client):
                         if player_rect.colliderect(d_rect.inflate(40, 40)) and my_data and not my_data.get("door_open_state", {}).get(d_id):
                             net_client.send({"type": "action", "action": "open_door", "door_id": d_id})
 
-        if game_started and not has_spawned:
-            spawn_x, spawn_y = get_spawn_position(map_state)
-            net_client.send({"type": "action", "action": "move", "x": spawn_x, "y": spawn_y, "dir": "down"})
+        if game_started and not has_spawned and my_data:
+            # Posisi spawn sekarang ditentukan oleh server.
+            # Ini penting supaya reconnect tidak mereset posisi player ke spawn awal.
             has_spawned = True
             
         if game_started and my_data and not hacking_mode:
@@ -374,17 +376,25 @@ def run_game(player_id, net_client):
             p_y = p_data.get("y", 0)
             p_dir = p_data.get("dir", "down")
             asset_idx = p_data.get("asset", 1)
+            is_online = p_data.get("connected", True)
             sprites = get_sprites_for_asset(asset_idx)
+
             if sprites and p_dir in sprites:
                 try:
-                    screen.blit(sprites[p_dir], (p_x, p_y))
+                    if is_online:
+                        screen.blit(sprites[p_dir], (p_x, p_y))
+                    else:
+                        ghost = sprites[p_dir].copy()
+                        ghost.set_alpha(90)
+                        screen.blit(ghost, (p_x, p_y))
                 except Exception:
                     pygame.draw.rect(screen, PLAYER_OTHER_COLOR, (p_x, p_y, 40, 55))
             else:
                 p_color = PLAYER_ME_COLOR if pid == player_id else PLAYER_OTHER_COLOR
                 pygame.draw.rect(screen, p_color, (p_x, p_y, 40, 55))
-                
-            name_text = tooltip_font.render(pid, True, TEXT_COLOR)
+
+            display_name = pid if is_online else f"{pid} (offline)"
+            name_text = tooltip_font.render(display_name, True, TEXT_COLOR)
             screen.blit(name_text, (p_x, p_y - 20))
 
         hud_bg = pygame.Surface((WIDTH, 40))
@@ -395,6 +405,15 @@ def run_game(player_id, net_client):
         ping = state.get("ping", 0)
         hud_txt = font.render(f"PID: {player_id} | ENERGY: {my_nrg} | POINTS: {my_pts} | PING: {ping}ms", True, TEXT_COLOR)
         screen.blit(hud_txt, (20, HEIGHT-30))
+
+        connection_status = state.get("connection_status", "connected" if net_client.is_connected else "reconnecting")
+        if connection_status != "connected":
+            status_text = font.render("RECONNECTING... mencoba menyambung ulang", True, (255, 220, 120))
+            status_box = pygame.Surface((status_text.get_width() + 24, 32))
+            status_box.set_alpha(220)
+            status_box.fill((35, 25, 10))
+            screen.blit(status_box, (WIDTH//2 - status_box.get_width()//2, 15))
+            screen.blit(status_text, (WIDTH//2 - status_text.get_width()//2, 21))
 
         if game_started:
             draw_live_leaderboard(screen, players_data, player_id, font, tooltip_font)

@@ -15,8 +15,10 @@ def start_client():
     logging.info(f"Mencoba connect ke {SERVER_IP}:{SERVER_PORT}...")
     
     try:
-        net_client.connect()
-        logging.info("Tersambung ke server. Memulai Arena...")
+        if net_client.connect():
+            logging.info("Tersambung ke server. Memulai Arena...")
+        else:
+            logging.warning("Belum tersambung ke server. Arena tetap dibuka dan akan mencoba reconnect otomatis.")
         run_game(player_id, net_client)
         
     except ConnectionRefusedError:
@@ -24,12 +26,11 @@ def start_client():
     except Exception as e:
         logging.error(f"Error kritis: {e}")
     finally:
-        if hasattr(net_client, 'sock') and net_client.sock:
-            try:
-                net_client.sock.close()
-                logging.info("Koneksi jaringan ditutup.")
-            except:
-                pass
+        try:
+            net_client.close()
+            logging.info("Koneksi jaringan ditutup.")
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     start_client()

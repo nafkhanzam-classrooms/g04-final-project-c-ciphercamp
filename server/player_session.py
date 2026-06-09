@@ -7,6 +7,8 @@ class PlayerSession:
         self.points = 0
         self.energy = 200
         self.asset = asset_index
+        self.connected = True
+        self.disconnected_at = None
         self.door_open_state : dict[str, bool] = {
             "door_main": False,
             "door_left": False,
@@ -29,8 +31,15 @@ class PlayerSession:
             "term_sec1":False,
             "term_sec2": False
         }
-        
-        
+
+    def mark_connected(self):
+        self.connected = True
+        self.disconnected_at = None
+
+    def mark_disconnected(self, disconnected_at):
+        self.connected = False
+        self.disconnected_at = disconnected_at
+
     def to_dict(self):
         return {
             "player_id": self.player_id,
@@ -40,6 +49,8 @@ class PlayerSession:
             "asset": getattr(self, "asset", 1),
             "points": self.points,
             "energy": self.energy,
+            "connected": self.connected,
+            "disconnected_at": self.disconnected_at,
             "door_open_state": self.door_open_state,
             "terminal_solve_state": self.terminal_solve_state
         }
