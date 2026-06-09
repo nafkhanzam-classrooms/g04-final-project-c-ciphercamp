@@ -7,14 +7,9 @@ from shared.config import SERVER_IP, SERVER_PORT
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 
 def start_client():
-    player_id = input("Masukkan Player ID kamu (contoh: tata_u): ").strip()
+    player_id = input("Masukkan username kamu: ").strip()
     if not player_id:
         player_id = "Player_" + str(int(pygame.time.get_ticks() / 1000))
-
-    ready = input("Room siap! Ketik 'Y' untuk masuk ke arena CTF: ").strip().upper()
-    if ready != 'Y':
-        print("Membatalkan join. Keluar dari game...")
-        return
 
     net_client = NetworkClient(player_id)
     logging.info(f"Mencoba connect ke {SERVER_IP}:{SERVER_PORT}...")
