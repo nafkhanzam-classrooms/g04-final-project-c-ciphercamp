@@ -60,5 +60,175 @@ Code ini berfungsi sebagai tampilan utama game di sisi client, yaitu tempat semu
 
 Jadi, `arena.py` berfungsi mengubah data game dari server menjadi tampilan interaktif yang bisa dimainkan, sekaligus menjadi tempat utama input dan visualisasi gameplay di sisi client.
 
+Program Server:
+
+`player_session.py`:     
+File ini Berfungsi untuk menyimpan struktur data pemain pada sisi server. Di dalam file ini terdapat class:
+
+```python
+class PlayerSession:
+```
+
+Class `PlayerSession` digunakan untuk merepresentasikan satu player yang sedang bermain. Setiap player memiliki data seperti ID player, posisi, arah gerak, poin, energi, aset karakter, status koneksi, serta progress permainan.
+
+Pada constructor, data player dibuat melalui:
+
+```python
+def __init__(self, player_id, start_x=480, start_y=580, asset_index: int = 1):
+```
+
+Parameter `player_id` digunakan sebagai identitas pemain. Sementara itu, `start_x` dan `start_y` digunakan sebagai posisi awal player. Atribut `asset_index` digunakan untuk menentukan tampilan karakter yang dipakai player.
+
+Beberapa atribut utama yang disimpan adalah:
+
+```python
+self.player_id = player_id
+self.x = start_x
+self.y = start_y
+self.dir = "down"
+self.points = 0
+self.energy = 200
+self.asset = asset_index
+```
+
+Atribut tersebut menunjukkan bahwa setiap player memiliki posisi koordinat, arah hadap, jumlah poin, energi, dan karakter yang digunakan.
+
+File ini juga menyimpan status koneksi player:
+
+```python
+self.connected = True
+self.disconnected_at = None
+```
+
+Atribut `connected` digunakan untuk menandai apakah player sedang terhubung ke server atau tidak. Atribut `disconnected_at` digunakan untuk menyimpan waktu ketika player terputus dari server.
+
+Bagian ini mendukung fitur **reconnect handling**. Ketika player disconnect, server tidak langsung menghapus data player. Server cukup mengubah status koneksi player melalui method:
+
+```python
+def mark_disconnected(self, disconnected_at):
+    self.connected = False
+    self.disconnected_at = disconnected_at
+```
+
+Jika player masuk kembali dengan username yang sama, server dapat mengaktifkan kembali session tersebut menggunakan:
+
+```python
+def mark_connected(self):
+    self.connected = True
+    self.disconnected_at = None
+```
+
+Dengan cara ini, player dapat melanjutkan permainan tanpa harus mulai dari awal.
+
+Selain data posisi dan koneksi, file ini juga menyimpan progress permainan player. Progress pintu disimpan dalam:
+
+```python
+self.door_open_state
+```
+
+Sedangkan progress terminal disimpan dalam:
+
+```python
+self.terminal_solve_state
+```
+
+Data ini digunakan untuk mengetahui pintu mana yang sudah terbuka dan terminal mana yang sudah berhasil diselesaikan oleh player.
+
+Agar data player dapat dikirim ke client, class ini memiliki method:
+
+```python
+def to_dict(self):
+```
+
+Method `to_dict()` mengubah objek `PlayerSession` menjadi dictionary. Data ini kemudian dapat dikirim oleh server ke client dalam pesan sinkronisasi, misalnya melalui pesan `sync_players`.
+
+<br>
+
+
+Program Shared:
+`config.py`:  
+
+File `config.py` berfungsi sebagai file konfigurasi bersama yang digunakan oleh client dan server. Di dalam file ini terdapat pengaturan yang dibutuhkan game, seperti alamat IP server, port server, ukuran layar, FPS, warna objek, dan ukuran tile.
+
+Pada bagian jaringan, terdapat konfigurasi:
+
+```python
+SERVER_IP = '127.0.0.1'
+SERVER_PORT = 5555
+```
+
+Konfigurasi tersebut digunakan oleh client untuk mengetahui alamat server yang akan dihubungi. Karena server berjalan secara lokal, IP yang digunakan adalah `127.0.0.1`, sedangkan port yang digunakan adalah `5555`.
+
+Selain itu, file ini juga menyimpan konfigurasi tampilan game, seperti:
+
+```python
+WIDTH, HEIGHT = 1000, 700
+FPS = 60
+```
+
+Bagian tersebut menentukan ukuran window game dan jumlah frame per second yang digunakan. Dengan adanya konfigurasi ini, tampilan game dapat dibuat konsisten di seluruh bagian program.
+
+File ini juga mendefinisikan beberapa warna yang digunakan untuk objek di dalam game, seperti warna background, dinding, lantai, player, pintu, terminal, dan teks. Contohnya:
+
+```python
+PLAYER_ME_COLOR = (100, 255, 100)
+PLAYER_OTHER_COLOR = (255, 100, 100)
+DOOR_COLOR = (200, 50, 50)
+TERMINAL_COLOR = (0, 180, 255)
+```
+
+Dengan menyimpan warna dan ukuran dalam satu file, pengaturan game menjadi lebih mudah diubah tanpa harus mencari satu per satu di file client atau server.
+
+Jadi, `config.py` berperan sebagai **pusat konfigurasi bersama** yang menyimpan nilai-nilai tetap yang digunakan dalam game, baik untuk kebutuhan jaringan maupun tampilan permainan.
+
+<br>
+
+`packet_parser.py`:  
+
+File `packet_parser.py` berfungsi untuk mengatur format pesan yang dikirim antara client dan server. Game ini menggunakan format pesan berbasis **JSON**. JSON dipilih karena mudah dibaca, mudah diproses di Python, dan cocok untuk mengirim data dalam bentuk pasangan key-value.
+
+Di dalam file ini terdapat fungsi:
+
+```python
+def encode_packet(data_dict):
+    return json.dumps(data_dict) + "\n"
+```
+
+Fungsi `encode_packet()` digunakan untuk mengubah dictionary Python menjadi string JSON. Setelah itu, pesan ditambahkan karakter newline `\n` di bagian akhir. Karakter newline digunakan sebagai penanda akhir dari satu pesan.
+
+Hal ini penting karena komunikasi menggunakan TCP berbentuk stream. Artinya, data yang diterima client atau server belum tentu langsung berupa satu pesan utuh. Oleh karena itu, setiap pesan perlu diberi pemisah agar dapat dibaca dengan benar.
+
+Selain itu, terdapat fungsi:
+
+```python
+def decode_stream(buffer):
+```
+
+Fungsi `decode_stream()` digunakan untuk membaca data yang masuk dari jaringan. Fungsi ini memecah data berdasarkan newline `\n`, lalu setiap pesan akan diubah kembali dari string JSON menjadi dictionary Python menggunakan `json.loads()`.
+
+Jika pesan yang diterima rusak atau bukan JSON yang valid, maka pesan tersebut tidak diproses dan akan dicatat melalui logging:
+
+```python
+logging.warning("Menerima data korup dari stream, membuang packet.")
+```
+
+Dengan mekanisme ini, program dapat menghindari error akibat packet yang tidak valid.
+
+Format pesan yang digunakan dalam komunikasi client-server secara umum berbentuk seperti berikut:
+
+```json
+{
+  "type": "action",
+  "action": "move",
+  "x": 300,
+  "y": 420,
+  "dir": "down"
+}
+```
+
+Setiap pesan memiliki atribut utama `type` untuk menunjukkan jenis pesan. Jika pesan berisi aksi player, maka digunakan tambahan atribut `action`. Contohnya aksi bergerak, membuka pintu, mengirim flag, atau melakukan ping ke server.
+
+Jadi, `packet_parser.py` berperan sebagai **pengatur encoding dan decoding packet** agar komunikasi antara client dan server dapat berjalan rapi, terstruktur, dan tidak tercampur antar pesan.
+
 
 ## Screenshot Hasil
