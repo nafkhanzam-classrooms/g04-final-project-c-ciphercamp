@@ -71,14 +71,63 @@ Setelah logging di-inisialisasi,
 1. Program server meminta untuk memasukkan jumlah player maksimum yang akan bergabung, dimana jumlah player tersebut dibataskan dari 2 sampai 4. Jumlah player tersebut akan disimpan dalam `max_players`. Jika terjadi Exception saat melakukan input, `max_players` diatur menjadi 4. Jika input kurang dari 2, `max_players` diatur menjadi 2, dan jika input lebih dari 4, `max_players` diatur menjadi 4.
 2. Program membuat objek `NetworkHandler` bernama `server` yang akan menangani networking.
 3. Program membuat objek `GameLogic` bernama `game` yang akan menangani logika game.
-4. Fungsi `process_action` pada `server` diatur menjadi fungsi `game.process_action` dan fungsi `on_disconnect` pada `server` diatur menjadi `game.remove_player`
-5. Server dimulai dengan menjalankan `server.start`. Jika terjadi exception `KeyboardInterrupt`, server akan berhenti dengan informasi log berisi "Server dimatikan secara manual".
+4. Callback `process_action` pada `server` diatur menjadi fungsi `game.process_action` dan callback `on_disconnect` pada `server` diatur menjadi `game.remove_player`
+5. Server dimulai dengan menjalankan `server.start`. Jika terjadi exception `KeyboardInterrupt`, server akan berhenti dengan informasi log berisi "Server dimatikan secara manual.".
 
-#### `network_handler.py`
+#### `network_handler.py`:
 
-#### `room_state.py`
+File `network_handler.py` mencakup class:
+``` python
+class NetworkHandler:
+```
+Class `NetworkHandler` berfungsi untuk menangani networking antar server dengan client. Tugas dari `NetworkHandler` mencakup penanganan client, pembersihan client, pengiriman data ke client, dan broadcast, yaitu pengiriman data ke seluruh client.
 
-#### `game_logic.py`
+Konstruktor `NetworkHandler` adalah:
+``` python
+    def __init__(self, game_logic_callback, host='0.0.0.0', port=5555, max_players=4):
+```
+`game_logic_callback` berisi callback untuk memproses aksi client. Argumen untuk callback `game_logic_callback`berupa `(cid, data)`, dengan `cid` sebagai id client dan `data` sebagai data yang akan diproses. `host` dan `port` digunakan untuk menentukan host dan port yang digunakan server, dan `max_players` menentukan jumlah player yang dapat bergabung.
+
+Atribut-atribut dari class `NetworkHandler` adalah sebagai berikut: 
+``` python
+self.host = host
+self.port = port
+self.max_players = max_players
+self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+self.clients = {}
+self.lock = threading.Lock()
+
+self.process_action = game_logic_callback
+self.on_disconnect = None
+```
+
+`NetworkHandler` dimulai melalui method:
+``` python
+def start(self):
+```
+Isi method `NetworkHandler.start` ditaruh dalam `try` block. 
+
+Dalam bagian `try`, kode dimulai dengan melakukan `bind` di `server_socket` dengan address `(host, port)`. `server_socket` kemudian dimasukkan ke mode *listening*. 
+
+Setelah dalam mode *listening*, kode memasuki loop `while True`, dimana `server_socket` akan menerima koneksi client, kemudian `client_socket` dan `addr` dari menerima client akan digunakan untuk membuat thread baru `client_thread`, yang menggunakan `self.handle_client` sebagai target dan `client_socket` dan `addr` sebagai argumen dari target tersebut. Agar `client_thread` tidak memblokir saat program server ditutup, atribut `daemon` di `client_thread` diatur menjadi `True`.
+
+Dalam bagian `except`, logging error dilakukan dengan format f"Gagal memulai server: {e}", dimana e adalah `Exception` yang ditangkap.
+
+Dalam bagian `finally`, `server_socket` ditutup.
+
+
+Penanganan client dilakukan melalui method:
+```python
+def handle_client(self, client_socket, addr):
+```
+
+
+
+#### `room_state.py`:
+
+#### `game_logic.py`:
 
 #### `player_session.py`:     
 File ini Berfungsi untuk menyimpan struktur data pemain pada sisi server. Di dalam file ini terdapat class:
