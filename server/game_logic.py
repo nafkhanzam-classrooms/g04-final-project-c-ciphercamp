@@ -13,7 +13,7 @@ class GameLogic:
         self.room = RoomState()
         self.max_players = max_players
 
-        self.battle_duration = 600  # 10 minutes
+        self.battle_duration = 600  
         self.start_time = None
         self.is_battle_active = False
         self.game_started = False

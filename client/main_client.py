@@ -1,6 +1,6 @@
 import logging
 import pygame
-from client.network_client import NetworkClient
+from client.network_client import NetworkClient, discover_server
 from client.arena import run_game 
 from shared.config import SERVER_IP, SERVER_PORT
 
@@ -11,8 +11,27 @@ def start_client():
     if not player_id:
         player_id = "Player_" + str(int(pygame.time.get_ticks() / 1000))
 
-    net_client = NetworkClient(player_id)
-    logging.info(f"Mencoba connect ke {SERVER_IP}:{SERVER_PORT}...")
+    print("\nMencari CipherCamp server otomatis di jaringan LAN/hotspot yang sama...")
+    discovered_server = discover_server(timeout=3.0, attempts=3)
+
+    if discovered_server:
+        server_ip, server_port = discovered_server
+        print(f"Server ditemukan otomatis: {server_ip}:{server_port}")
+    else:
+        print("Server tidak ditemukan otomatis.")
+        print("Fallback: masukkan IP server manual atau kosongkan untuk localhost.")
+
+        server_ip = input("Masukkan IP server (kosongkan untuk localhost): ").strip()
+        if not server_ip:
+            server_ip = SERVER_IP
+
+        try:
+            server_port = int(input(f"Masukkan port server (kosongkan untuk {SERVER_PORT}): ").strip() or SERVER_PORT)
+        except ValueError:
+            server_port = SERVER_PORT
+
+    net_client = NetworkClient(player_id, server_ip=server_ip, server_port=server_port)
+    logging.info(f"Mencoba connect ke {server_ip}:{server_port}...")
     
     try:
         if net_client.connect():

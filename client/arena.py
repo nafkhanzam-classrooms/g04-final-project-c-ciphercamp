@@ -28,7 +28,7 @@ def get_spawn_position(map_state):
     return 480, 580
 
 def get_sprites_for_asset(asset_index: int):
-    # cached loader for player sprites per asset folder player{n}
+    
     if asset_index in _ASSET_SPRITES_CACHE:
         return _ASSET_SPRITES_CACHE[asset_index]
 
@@ -102,7 +102,7 @@ def draw_live_leaderboard(screen, players_data, player_id, font, tooltip_font):
 
 def run_game(player_id, net_client):
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption(f"CipherCamp CTF - {player_id}")
+    pygame.display.set_caption(f"CipherCamp - {player_id}")
     clock = pygame.time.Clock()
 
     try:
@@ -116,7 +116,7 @@ def run_game(player_id, net_client):
         question_font = pygame.font.SysFont(None, 20)
 
     pygame.init()
-    # attempt to preload default asset 1 (optional)
+    
     try:
         get_sprites_for_asset(1)
     except:
@@ -286,8 +286,6 @@ def run_game(player_id, net_client):
                             net_client.send({"type": "action", "action": "open_door", "door_id": d_id})
 
         if game_started and not has_spawned and my_data:
-            # Posisi spawn sekarang ditentukan oleh server.
-            # Ini penting supaya reconnect tidak mereset posisi player ke spawn awal.
             has_spawned = True
             
         if game_started and my_data and not hacking_mode:
@@ -347,7 +345,7 @@ def run_game(player_id, net_client):
                 screen.blit(info_text, (t_rect.x - 15, t_rect.y - 20))
                 
                 if player_rect.colliderect(t_rect.inflate(40, 40)):
-                    prompt = tooltip_font.render("[E] Retas Soal", True, (255, 255, 255))
+                    prompt = tooltip_font.render("[E] Buka Soal", True, (255, 255, 255))
                     screen.blit(prompt, (t_rect.x - 20, t_rect.bottom + 5))
 
         for d_id, d_rect in runtime_doors.items():
@@ -460,10 +458,10 @@ def run_game(player_id, net_client):
             pygame.draw.rect(screen, (30, 30, 40), (box_x, box_y, box_width, box_height), border_radius=10)
             pygame.draw.rect(screen, active_vis.get("color", TERMINAL_COLOR), (box_x, box_y, box_width, box_height), width=3, border_radius=10)
             
-            title = font.render(f"--- MERETAS TERMINAL TIER {active_vis.get('tier', '?')} ---", True, (255, 255, 255))
+            title = font.render(f"--- MEMBUKA TIER {active_vis.get('tier', '?')} ---", True, (255, 255, 255))
             screen.blit(title, (box_x + 30, box_y + 30))
             
-            question_str = active_data.get("question", "Tunggu data dari server...")
+            question_str = active_data.get("question", "Menunggu data dari server...")
             q_text = question_font.render(question_str, True, (200, 200, 200))
             screen.blit(q_text, (box_x + 30, box_y + 100))
             
@@ -478,14 +476,13 @@ def run_game(player_id, net_client):
                 cursor_x = input_box.x + 10 + txt_surface.get_width()
                 pygame.draw.rect(screen, (255, 255, 255), (cursor_x, input_box.y + 10, 2, 20))
                 
-            guide1 = tooltip_font.render("Ketik jawaban (FLAG) dan tekan ENTER untuk submit.", True, (150, 150, 150))
-            guide2 = tooltip_font.render("Tekan ESC untuk membatalkan proses peretasan.", True, (150, 150, 150))
+            guide1 = tooltip_font.render("Ketik jawaban dan tekan ENTER untuk submit.", True, (150, 150, 150))
+            guide2 = tooltip_font.render("Tekan ESC untuk membatalkan.", True, (150, 150, 150))
             screen.blit(guide1, (box_x + 30, box_y + 400))
             screen.blit(guide2, (box_x + 30, box_y + 420))
 
         pygame.display.flip()
         clock.tick(FPS)
-        # handle game over display if server sent final leaderboard
         game_over = state.get("game_over")
         if game_over:
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -501,11 +498,10 @@ def run_game(player_id, net_client):
                 txt_s = tooltip_font.render(text, True, (255, 255, 255))
                 screen.blit(txt_s, (WIDTH//2 - txt_s.get_width()//2, 140 + i*30))
 
-            sub = tooltip_font.render("Tekan ESC atau tutup jendela untuk keluar.", True, (200, 200, 200))
+            sub = tooltip_font.render("Tekan ESC untuk keluar.", True, (200, 200, 200))
             screen.blit(sub, (WIDTH//2 - sub.get_width()//2, HEIGHT - 80))
             pygame.display.flip()
 
-            # wait until user exits
             waiting = True
             while waiting:
                 for ev in pygame.event.get():

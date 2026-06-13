@@ -13,7 +13,7 @@ logging.basicConfig(
 if __name__ == "__main__":
     logging.info("--- Memulai CipherCamp Server ---")
     try:
-        max_players = int(input("Masukkan max player (2-4): ").strip())
+        max_players = int(input("Masukkan max player (2-4): ").strip() or 4)
     except Exception:
         max_players = 4
 
@@ -32,4 +32,4 @@ if __name__ == "__main__":
     try:
         server.start()
     except KeyboardInterrupt:
-        logging.info("Server dimatikan secara manual.")
+        logging.info("Server dimatikan.")

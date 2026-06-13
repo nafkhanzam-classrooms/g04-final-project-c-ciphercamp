@@ -2,12 +2,56 @@ import socket
 import threading
 import time
 import logging
-from shared.config import SERVER_IP, SERVER_PORT
+import json
+from shared.config import SERVER_IP, SERVER_PORT, DISCOVERY_PORT, DISCOVERY_REQUEST, DISCOVERY_RESPONSE
 from shared.packet_parser import encode_packet, decode_stream
 
+def discover_server(timeout=3.0, attempts=3):
+    message = json.dumps({
+        "type": DISCOVERY_REQUEST,
+        "client_time": time.time()
+    }).encode("utf-8")
+
+    for attempt in range(attempts):
+        udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        udp_sock.settimeout(timeout / max(attempts, 1))
+
+        try:
+            udp_sock.sendto(message, ("255.255.255.255", DISCOVERY_PORT))
+
+            while True:
+                data, addr = udp_sock.recvfrom(2048)
+                try:
+                    response = json.loads(data.decode("utf-8").strip())
+                except Exception:
+                    continue
+
+                if response.get("type") != DISCOVERY_RESPONSE:
+                    continue
+
+                server_ip = addr[0]
+                server_port = int(response.get("server_port", SERVER_PORT))
+                logging.info(f"Server ditemukan otomatis di {server_ip}:{server_port}")
+                return server_ip, server_port
+
+        except socket.timeout:
+            logging.info(f"Discovery attempt {attempt + 1}/{attempts} belum menemukan server.")
+        except Exception as e:
+            logging.warning(f"LAN discovery gagal pada attempt {attempt + 1}: {e}")
+        finally:
+            try:
+                udp_sock.close()
+            except Exception:
+                pass
+
+    return None
+
 class NetworkClient:
-    def __init__(self, player_id):
+    def __init__(self, player_id, server_ip=SERVER_IP, server_port=SERVER_PORT):
         self.player_id = player_id
+        self.server_ip = server_ip
+        self.server_port = server_port
         self.sock = None
         self.lock = threading.Lock()
         self._stop_requested = False
@@ -34,7 +78,7 @@ class NetworkClient:
         try:
             new_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             new_sock.settimeout(5)
-            new_sock.connect((SERVER_IP, SERVER_PORT))
+            new_sock.connect((self.server_ip, self.server_port))
             new_sock.settimeout(None)
 
             with self.lock:
@@ -51,7 +95,7 @@ class NetworkClient:
                 ping_thread = threading.Thread(target=self._ping_loop, daemon=True)
                 ping_thread.start()
 
-            logging.info("Berhasil connect/reconnect ke server.")
+            logging.info(f"Berhasil connect/reconnect ke server {self.server_ip}:{self.server_port}.")
             return True
 
         except Exception as e:

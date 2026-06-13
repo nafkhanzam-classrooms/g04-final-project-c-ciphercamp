@@ -3,6 +3,7 @@ import threading
 import json
 import logging
 import time
+from shared.config import DISCOVERY_PORT, DISCOVERY_REQUEST, DISCOVERY_RESPONSE
 
 logging.Formatter.converter = time.gmtime
 logging.basicConfig(
@@ -24,12 +25,15 @@ class NetworkHandler:
 
         self.process_action = game_logic_callback
         self.on_disconnect = None
+        self.discovery_running = False
 
     def start(self):
         try:
             self.server_socket.bind((self.host, self.port))
             self.server_socket.listen(5)
-            logging.info(f"Server berjalan dan mendengarkan di {self.host}:{self.port}")
+            logging.info(f"Server berjalan dan mendengarkan TCP di {self.host}:{self.port}")
+
+            self.start_discovery_service()
 
             while True:
                 client_socket, addr = self.server_socket.accept()
@@ -41,6 +45,73 @@ class NetworkHandler:
             logging.error(f"Gagal memulai server: {e}")
         finally:
             self.server_socket.close()
+
+
+    def start_discovery_service(self):
+        if self.discovery_running:
+            return
+
+        self.discovery_running = True
+        discovery_thread = threading.Thread(target=self._discovery_loop, daemon=True)
+        discovery_thread.start()
+        logging.info(f"LAN discovery aktif di UDP port {DISCOVERY_PORT}")
+
+    def _discovery_loop(self):
+        udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        try:
+            udp_sock.bind(("0.0.0.0", DISCOVERY_PORT))
+        except Exception as e:
+            logging.error(f"Gagal menjalankan LAN discovery: {e}")
+            self.discovery_running = False
+            try:
+                udp_sock.close()
+            except Exception:
+                pass
+            return
+
+        while self.discovery_running:
+            try:
+                data, addr = udp_sock.recvfrom(2048)
+                try:
+                    packet = json.loads(data.decode("utf-8").strip())
+                except Exception:
+                    continue
+
+                if packet.get("type") != DISCOVERY_REQUEST:
+                    continue
+
+                response = {
+                    "type": DISCOVERY_RESPONSE,
+                    "server_name": "CipherCamp Server",
+                    "server_ip": self._get_lan_ip(),
+                    "server_port": self.port,
+                    "max_players": self.max_players,
+                    "time": time.time()
+                }
+
+                udp_sock.sendto((json.dumps(response) + "\n").encode("utf-8"), addr)
+                logging.info(f"Menjawab discovery request dari {addr}")
+
+            except Exception as e:
+                if self.discovery_running:
+                    logging.warning(f"Error pada LAN discovery: {e}")
+
+        try:
+            udp_sock.close()
+        except Exception:
+            pass
+
+    def _get_lan_ip(self):
+        try:
+            temp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            temp_sock.connect(("8.8.8.8", 80))
+            ip_address = temp_sock.getsockname()[0]
+            temp_sock.close()
+            return ip_address
+        except Exception:
+            return "127.0.0.1"
 
     def handle_client(self, client_socket, addr):
         logging.info(f"Koneksi baru masuk dari {addr}")
