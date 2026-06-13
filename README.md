@@ -16,9 +16,9 @@ Link ditaruh di bawah ini
 
 ## Penjelasan Program
 
-Program Client:
+### Program Client:
 
-`main_client.py`:
+#### `main_client.py`:
 
 Code ini berfungsi menghubungkan input pemain, koneksi ke server, dan juga interface game di modul lainnya. Di awal kode, program mengaktifkan logging dengan format sederhana supaya status koneksi, error, dan info runtime mudah dibaca. Program lalu menjalankan fungsi `start_client()` yang berisi:
 1. Client diminta username dari terminal dengan input. Jika username dikosongkan, program membuat nama otomatis dengan pola Player_ lalu ditambah nilai waktu dari `pygame.time.get_ticks()`.
@@ -30,7 +30,7 @@ Jadi, `main_client.py` berfungsi sebagai pintu masuk client yang mengatur alur d
 
 <br>
 
-`network_client.py`:
+#### `network_client.py`:
 
 Code ini berfungsi sebagai penghubung komunikasi antara client dan server, sekaligus penyimpan state game di sisi client. Di dalam kode ini ada class `NetworkClient` yang mengatur socket, thread penerima data, thread ping, dan mekanisme reconnect otomatis. Alur kerjanya sebagai berikut:
 1. Saat objek `NetworkClient` dibuat, program menyimpan `player_id`, menyiapkan socket, lock, flag kontrol koneksi, dan dictionary `game_state` untuk menyimpan data pemain, map, ping, status game, dan informasi lobby.
@@ -46,7 +46,7 @@ Jadi, `network_client.py` bertugas menyambungkan client ke server, menjaga konek
 
 <br>
 
-`arena.py`:
+#### `arena.py`:
 
 Code ini berfungsi sebagai tampilan utama game di sisi client, yaitu tempat semua elemen visual, input pemain, dan interaksi gameplay digabungkan. Di dalam file ini, fungsi `run_game()` menjalankan loop utama Pygame, menggambar map, menampilkan pemain, memproses input keyboard, serta membaca state terbaru dari `NetworkClient`. Alur kerjanya sebagai berikut:
 1. Di awal program, `arena.py` menyiapkan helper seperti `rect_from_data()` untuk mengubah data koordinat dari server menjadi `pygame.Rect`, `get_spawn_position()` untuk menentukan titik spawn player, serta `get_sprites_for_asset()` untuk memuat sprite player dari folder `assets/player{n}` dan menyimpannya ke cache agar tidak dimuat berulang.
@@ -60,9 +60,76 @@ Code ini berfungsi sebagai tampilan utama game di sisi client, yaitu tempat semu
 
 Jadi, `arena.py` berfungsi mengubah data game dari server menjadi tampilan interaktif yang bisa dimainkan, sekaligus menjadi tempat utama input dan visualisasi gameplay di sisi client.
 
-Program Server:
+### Program Server:
 
-`player_session.py`:     
+#### `main_server.py`:
+File `main_server.py` berperan sebagai pintu masuk untuk memulaikan program Server.
+
+Kode ini dimulai dengan menginisialisasi logging.
+
+Setelah logging di-inisialisasi, 
+1. Program server meminta untuk memasukkan jumlah player maksimum yang akan bergabung, dimana jumlah player tersebut dibataskan dari 2 sampai 4. Jumlah player tersebut akan disimpan dalam `max_players`. Jika terjadi Exception saat melakukan input, `max_players` diatur menjadi 4. Jika input kurang dari 2, `max_players` diatur menjadi 2, dan jika input lebih dari 4, `max_players` diatur menjadi 4.
+2. Program membuat objek `NetworkHandler` bernama `server` yang akan menangani networking.
+3. Program membuat objek `GameLogic` bernama `game` yang akan menangani logika game.
+4. Callback `process_action` pada `server` diatur menjadi fungsi `game.process_action` dan callback `on_disconnect` pada `server` diatur menjadi `game.remove_player`
+5. Server dimulai dengan menjalankan `server.start`. Jika terjadi exception `KeyboardInterrupt`, server akan berhenti dengan informasi log berisi "Server dimatikan secara manual.".
+
+#### `network_handler.py`:
+
+File `network_handler.py` mencakup class:
+``` python
+class NetworkHandler:
+```
+Class `NetworkHandler` berfungsi untuk menangani networking antar server dengan client. Tugas dari `NetworkHandler` mencakup penanganan client, pembersihan client, pengiriman data ke client, dan broadcast, yaitu pengiriman data ke seluruh client.
+
+Konstruktor `NetworkHandler` adalah:
+``` python
+    def __init__(self, game_logic_callback, host='0.0.0.0', port=5555, max_players=4):
+```
+`game_logic_callback` berisi callback untuk memproses aksi client. Argumen untuk callback `game_logic_callback`berupa `(cid, data)`, dengan `cid` sebagai id client dan `data` sebagai data yang akan diproses. `host` dan `port` digunakan untuk menentukan host dan port yang digunakan server, dan `max_players` menentukan jumlah player yang dapat bergabung.
+
+Atribut-atribut dari class `NetworkHandler` adalah sebagai berikut: 
+``` python
+self.host = host
+self.port = port
+self.max_players = max_players
+self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+self.clients = {}
+self.lock = threading.Lock()
+
+self.process_action = game_logic_callback
+self.on_disconnect = None
+```
+
+`NetworkHandler` dimulai melalui method:
+``` python
+def start(self):
+```
+Isi method `NetworkHandler.start` ditaruh dalam `try` block. 
+
+Dalam bagian `try`, kode dimulai dengan melakukan `bind` di `server_socket` dengan address `(host, port)`. `server_socket` kemudian dimasukkan ke mode *listening*. 
+
+Setelah dalam mode *listening*, kode memasuki loop `while True`, dimana `server_socket` akan menerima koneksi client, kemudian `client_socket` dan `addr` dari menerima client akan digunakan untuk membuat thread baru `client_thread`, yang menggunakan `self.handle_client` sebagai target dan `client_socket` dan `addr` sebagai argumen dari target tersebut. Agar `client_thread` tidak memblokir saat program server ditutup, atribut `daemon` di `client_thread` diatur menjadi `True`.
+
+Dalam bagian `except`, logging error dilakukan dengan format f"Gagal memulai server: {e}", dimana e adalah `Exception` yang ditangkap.
+
+Dalam bagian `finally`, `server_socket` ditutup.
+
+
+Penanganan client dilakukan melalui method:
+```python
+def handle_client(self, client_socket, addr):
+```
+
+
+
+#### `room_state.py`:
+
+#### `game_logic.py`:
+
+#### `player_session.py`:     
 File ini Berfungsi untuk menyimpan struktur data pemain pada sisi server. Di dalam file ini terdapat class:
 
 ```python
@@ -145,8 +212,8 @@ Method `to_dict()` mengubah objek `PlayerSession` menjadi dictionary. Data ini k
 <br>
 
 
-Program Shared:
-`config.py`:  
+### Program Shared:
+#### `config.py`:  
 
 File `config.py` berfungsi sebagai file konfigurasi bersama yang digunakan oleh client dan server. Di dalam file ini terdapat pengaturan yang dibutuhkan game, seperti alamat IP server, port server, ukuran layar, FPS, warna objek, dan ukuran tile.
 
@@ -183,7 +250,7 @@ Jadi, `config.py` berperan sebagai **pusat konfigurasi bersama** yang menyimpan 
 
 <br>
 
-`packet_parser.py`:  
+#### `packet_parser.py`:  
 
 File `packet_parser.py` berfungsi untuk mengatur format pesan yang dikirim antara client dan server. Game ini menggunakan format pesan berbasis **JSON**. JSON dipilih karena mudah dibaca, mudah diproses di Python, dan cocok untuk mengirim data dalam bentuk pasangan key-value.
 
@@ -230,5 +297,6 @@ Setiap pesan memiliki atribut utama `type` untuk menunjukkan jenis pesan. Jika p
 
 Jadi, `packet_parser.py` berperan sebagai **pengatur encoding dan decoding packet** agar komunikasi antara client dan server dapat berjalan rapi, terstruktur, dan tidak tercampur antar pesan.
 
+```main_server.py```
 
 ## Screenshot Hasil
