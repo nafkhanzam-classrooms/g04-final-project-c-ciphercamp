@@ -107,11 +107,11 @@ self.on_disconnect = None
 ``` python
 def start(self):
 ```
-Isi method `NetworkHandler.start` ditaruh dalam `try` block. 
+Isi method `start` ditaruh dalam `try` block. 
 
 Dalam bagian `try`, kode dimulai dengan melakukan `bind` di `server_socket` dengan address `(host, port)`. `server_socket` kemudian dimasukkan ke mode *listening*. 
 
-Setelah dalam mode *listening*, kode memasuki loop `while True`, dimana `server_socket` akan menerima koneksi client, kemudian `client_socket` dan `addr` dari menerima client akan digunakan untuk membuat thread baru `client_thread`, yang menggunakan `self.handle_client` sebagai target dan `client_socket` dan `addr` sebagai argumen dari target tersebut. Agar `client_thread` tidak memblokir saat program server ditutup, atribut `daemon` di `client_thread` diatur menjadi `True`.
+Setelah dalam mode *listening*, kode memasuki loop `while True`, dimana `server_socket` akan menerima koneksi client, kemudian `client_socket` dan `addr` dari menerima client akan digunakan untuk membuat thread baru `client_thread`, yang menggunakan `handle_client` sebagai target dan `client_socket` dan `addr` sebagai argumen dari target tersebut. Agar `client_thread` tidak memblokir saat program server ditutup, atribut `daemon` di `client_thread` diatur menjadi `True`.
 
 Dalam bagian `except`, logging error dilakukan dengan format f"Gagal memulai server: {e}", dimana e adalah `Exception` yang ditangkap.
 
@@ -122,10 +122,18 @@ Penanganan client dilakukan melalui method:
 ```python
 def handle_client(self, client_socket, addr):
 ```
+Pada awal kode `handle_client`, dibuat variabel berikut:
+``` python
+client_id = None
+buffer = ""
+```
+Kode kemudian memasuki `try` block, dimana terdapat loop `while True`.
 
-
+Dalam loop `while True` tersebut, program membaca data `client_socket` dengan `.recv()` dan menaruhnya dalam variabel `data`. `buffer` kemudian ditambah dengan `data` yang di-decode dengan `utf-8` sebagai encodingnya.
 
 #### `room_state.py`:
+
+
 
 #### `game_logic.py`:
 
