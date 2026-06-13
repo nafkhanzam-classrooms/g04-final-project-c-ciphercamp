@@ -21,10 +21,10 @@ Link ditaruh di bawah ini
 #### `main_client.py`:
 
 Code ini berfungsi menghubungkan input pemain, koneksi ke server, dan juga interface game di modul lainnya. Di awal kode, program mengaktifkan logging dengan format sederhana supaya status koneksi, error, dan info runtime mudah dibaca. Program lalu menjalankan fungsi `start_client()` yang berisi:
-1. Client diminta username dari terminal dengan input. Jika username dikosongkan, program membuat nama otomatis dengan pola Player_ lalu ditambah nilai waktu dari `pygame.time.get_ticks()`.
-2. Setelah itu dibuat objek `NetworkClient` dengan player_id tadi Client mencoba connect ke server pada alamat dan port yang diambil dari `shared/config.py`. Jika koneksi berhasil, program mencatat bahwa server tersambung dan lanjut membuka arena game. Jika koneksi gagal, arena tetap dibuka, lalu mekanisme reconnect otomatis akan dijalankan oleh `NetworkClient`.
-3. Saat arena sudah siap, fungsi `run_game()` dipanggil untuk menjalankan loop visual dan gameplay. Jika server tidak aktif, `ConnectionRefusedError` ditangani secara khusus supaya pesan yang muncul lebih jelas. Error lain ditangani oleh blok Exception umum.
-4. Di bagian finally, koneksi network ditutup agar socket tidak dibiarkan terbuka.
+1. Client diminta memasukkan username dari terminal. Jika username dikosongkan, program membuat nama otomatis dengan pola `Player_` lalu ditambah nilai waktu dari `pygame.time.get_ticks()`.
+2. Setelah itu dibuat objek `NetworkClient` dengan `player_id` tadi. Program lalu mencoba mencari server secara otomatis di jaringan LAN/hotspot yang sama melalui `discover_server()`. Jika server tidak ditemukan, client meminta input IP dan port secara manual, dengan fallback ke nilai default dari `shared/config.py`.
+3. Setelah `NetworkClient` siap, program mencoba `connect()` ke server. Jika koneksi berhasil, program mencatat bahwa server tersambung. Jika gagal, program hanya memberi peringatan dan tetap membuka arena agar client bisa mencoba reconnect otomatis. Setelah itu `run_game()` dipanggil untuk menjalankan loop visual dan gameplay. `ConnectionRefusedError` ditangani secara khusus supaya pesan yang muncul lebih jelas, sedangkan error lain ditangani oleh blok `Exception` umum.
+4. Di bagian `finally`, koneksi network ditutup agar socket tidak dibiarkan terbuka.
 
 Jadi, `main_client.py` berfungsi sebagai pintu masuk client yang mengatur alur dari input username, koneksi ke server, hingga menjalankan game di arena.
 
@@ -33,14 +33,15 @@ Jadi, `main_client.py` berfungsi sebagai pintu masuk client yang mengatur alur d
 #### `network_client.py`:
 
 Code ini berfungsi sebagai penghubung komunikasi antara client dan server, sekaligus penyimpan state game di sisi client. Di dalam kode ini ada class `NetworkClient` yang mengatur socket, thread penerima data, thread ping, dan mekanisme reconnect otomatis. Alur kerjanya sebagai berikut:
-1. Saat objek `NetworkClient` dibuat, program menyimpan `player_id`, menyiapkan socket, lock, flag kontrol koneksi, dan dictionary `game_state` untuk menyimpan data pemain, map, ping, status game, dan informasi lobby.
-2. Method `connect()` dipakai untuk membuka koneksi ke server menggunakan IP dan Port dari `shared/config.py`. Jika koneksi berhasil, client langsung mengirim packet `join` berisi `player_id`, lalu menjalankan thread `receive_loop` untuk menerima data dari server dan thread `ping_loop` untuk mengecek latensi koneksi.
-3. Method `send()` dipakai untuk mengirim data ke server. Data yang dikirim diubah dulu menjadi packet JSON melalui fungsi `encode_packet()` dari `shared/packet_parser.py`, lalu dikirim melalui socket. Jika pengiriman gagal, koneksi dianggap putus dan client akan menandai status reconnect.
-4. Method `_receive_loop()` terus membaca data dari socket, menampungnya di buffer, lalu memecahnya menjadi packet utuh memakai `decode_stream()`. Setiap packet yang masuk akan diteruskan ke `_handle_packet()` untuk memperbarui `game_state`.
-5. Method `_handle_packet()` adalah bagian penting karena di sinilah respon dari server diproses. `sync_players` memperbarui data client, `sync_map` memperbarui map, `pong` dipakai untuk menghitung ping, `join_ack` menyimpan status join atau reconnect, `game_start` dan `game_over` mengubah status game, sedangkan `lobby_state` menyimpan jumlah client di lobby.
-6. Jika koneksi terputus, method `_mark_disconnected()` menutup socket lama dan mengubah status menjadi reconnecting. Setelah itu `_schedule_reconnect()` akan menjalankan `_reconnect_loop()` yang terus mencoba reconnect hingga berhasil atau program ditutup.
-7. Method `_ping_loop()` secara berkala mengirim packet `ping` ke server. Packet ini dibalas server dengan `pong`, lalu selisih waktunya dipakai untuk menghitung nilai ping yang ditampilkan di display game.
-8. Method `close()` dipanggil saat client selesai agar koneksi dihentikan dengan rapi dan socket ditutup.
+1. Saat objek `NetworkClient` dibuat, program menyimpan `player_id`, `server_ip`, dan `server_port`, lalu menyiapkan socket, lock, flag kontrol koneksi, dan dictionary `game_state` untuk menyimpan data pemain, map, ping, status koneksi, status game, dan informasi lobby.
+2. Di luar class `NetworkClient`, ada fungsi `discover_server()` yang dipakai untuk mencari server secara otomatis lewat UDP broadcast. Fungsi ini akan mengembalikan IP dan port server jika ditemukan, atau `None` jika tidak ada respons.
+3. Method `connect()` dipakai untuk membuka koneksi ke server menggunakan `server_ip` dan `server_port` yang sudah disimpan di objek. Jika koneksi berhasil, client langsung mengirim packet `join` berisi `player_id`, lalu menjalankan thread `_receive_loop()` untuk menerima data dari server dan thread `_ping_loop()` untuk mengecek latensi koneksi.
+4. Method `send()` dipakai untuk mengirim data ke server. Data yang dikirim diubah dulu menjadi packet JSON melalui fungsi `encode_packet()` dari `shared/packet_parser.py`, lalu dikirim melalui socket. Jika pengiriman gagal, koneksi dianggap putus dan client menandai status menjadi reconnecting.
+5. Method `_receive_loop()` terus membaca data dari socket, menampungnya di buffer, lalu memecahnya menjadi packet utuh memakai `decode_stream()`. Setiap packet yang masuk akan diteruskan ke `_handle_packet()` untuk memperbarui `game_state`.
+6. Method `_handle_packet()` memproses respon dari server. `sync_players` memperbarui data pemain, `sync_map` memperbarui map, `pong` dipakai untuk menghitung ping, `join_ack` menyimpan status join atau reconnect sekaligus info lobby, `game_start` dan `game_over` mengubah status game, `notify` menambahkan notifikasi, sedangkan `lobby_state` menyimpan jumlah client di lobby.
+7. Jika koneksi terputus, method `_mark_disconnected()` menutup socket lama dan mengubah status menjadi reconnecting. Setelah itu `_schedule_reconnect()` akan menjalankan `_reconnect_loop()` yang terus mencoba reconnect hingga berhasil atau program ditutup.
+8. Method `_ping_loop()` secara berkala mengirim packet `ping` ke server setiap 2 detik. Packet ini dibalas server dengan `pong`, lalu selisih waktunya dipakai untuk menghitung nilai ping yang disimpan di `game_state`.
+9. Method `close()` dipanggil saat client selesai agar koneksi dihentikan dengan rapi dan socket ditutup.
 
 Jadi, `network_client.py` bertugas menyambungkan client ke server, menjaga koneksi tetap hidup, menyimpan state terbaru game, dan memastikan client bisa pulih otomatis jika koneksi terputus.
 
